@@ -1,0 +1,77 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { @apply text-ink; }
+  body {
+    @apply bg-surface font-sans antialiased text-[15px];
+    background-image:
+      radial-gradient(1100px 560px at 88% -8%, rgba(124, 58, 237, 0.09), transparent 58%),
+      radial-gradient(820px 460px at -6% 32%, rgba(56, 189, 248, 0.07), transparent 55%),
+      radial-gradient(900px 520px at 55% 115%, rgba(251, 146, 60, 0.07), transparent 58%);
+    background-attachment: fixed;
+  }
+  html[dir="rtl"] body { font-family: "Tajawal", "Fira Sans", sans-serif; }
+  h1, h2, h3 { font-family: "Sora", "Tajawal", "Fira Sans", sans-serif; }
+  html[dir="rtl"] h1, html[dir="rtl"] h2, html[dir="rtl"] h3 { font-family: "Tajawal", sans-serif; }
+  ::selection { @apply bg-primary-200 text-primary-900; }
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator { cursor: pointer; }
+}
+
+@layer components {
+  /* Rich brand gradients */
+  .grad-primary {
+    background-image: linear-gradient(135deg, #6366f1 0%, #7c3aed 55%, #9333ea 100%);
+  }
+  .grad-deep {
+    background-image: linear-gradient(168deg, #1e1b4b 0%, #3b0f7e 48%, #6d28d9 88%, #86198f 118%);
+  }
+  .grad-accent {
+    background-image: linear-gradient(135deg, #fbbf24 0%, #f97316 55%, #f43f5e 115%);
+  }
+  .grad-text {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(100deg, #4c1d95 0%, #7c3aed 55%, #db2777 110%);
+  }
+  .card { @apply rounded-2xl bg-white/95 shadow-card border border-primary-100/50 backdrop-blur-sm; }
+  .input {
+    @apply w-full rounded-xl border border-primary-200/80 bg-white px-3.5 py-2.5 text-sm
+      outline-none transition-all duration-200 placeholder:text-slate-400
+      focus:border-primary-400 focus:shadow-glow;
+  }
+  .label { @apply mb-1.5 block text-[13px] font-medium text-slate-600; }
+  .thead th {
+    @apply px-4 py-3 text-start text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+  .trow td { @apply px-4 py-3 text-sm border-t border-primary-100/60; }
+
+  /* Shine sweep for gradient buttons */
+  .shine { position: relative; overflow: hidden; }
+  .shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, 0.35) 50%, transparent 62%);
+    transform: translateX(-130%);
+    transition: transform 0.7s ease;
+    pointer-events: none;
+  }
+  .shine:hover::after { transform: translateX(130%); }
+  html[dir="rtl"] .shine::after { transform: translateX(130%); }
+  html[dir="rtl"] .shine:hover::after { transform: translateX(-130%); }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #ddd6fe; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #c4b5fd; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

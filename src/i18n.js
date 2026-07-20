@@ -174,6 +174,30 @@ export const AR = {
   "Ajouter le service": "إضافة الخدمة",
   "Ajouter ce paiement": "إضافة هذه الدفعة",
 
+  // ===== TVA =====
+  "TVA": "الرسم على القيمة المضافة",
+  "Appliquer la TVA": "تطبيق الرسم على القيمة المضافة",
+  "Taux de TVA (%)": "نسبة الرسم (%)",
+  "par défaut": "افتراضي",
+  "Total HT": "المجموع دون الرسم",
+  "Total TTC": "المجموع مع الرسم",
+  "Total HT (modifiable)": "المجموع دون الرسم (قابل للتعديل)",
+  "Total à payer": "المجموع المستحق",
+
+  // ===== Printable documents =====
+  "FACTURE": "فاتورة",
+  "BON DE RÉPARATION": "وصل التصليح",
+  "Facture": "فاتورة",
+  "Bon de réparation": "وصل التصليح",
+  "Imprimer la facture": "طباعة الفاتورة",
+  "Imprimer le bon de réparation": "طباعة وصل التصليح",
+  "Désignation": "البيان",
+  "Prix unitaire": "سعر الوحدة",
+  "Service": "خدمة",
+  "Pièce": "قطعة",
+  "Tél": "الهاتف",
+  "Signature du client": "توقيع العميل",
+
   // ===== Services =====
   "Gérez vos services et leurs tarifs": "أدر خدماتك وأسعارها",
   "Aucun service pour le moment": "لا توجد خدمات حاليا",

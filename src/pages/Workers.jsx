@@ -5,7 +5,7 @@ import {
   HardHat, Phone, UserCheck, UserX as UserXIcon,
 } from "lucide-react";
 import { useApp } from "../context";
-import { uid, todayISO, fmtMoney, fmtDate, PAGES, PAGE_ACTIONS } from "../store";
+import { uid, todayISO, fmtMoney, fmtDate, repairAmounts, PAGES, PAGE_ACTIONS } from "../store";
 import { NAV } from "../components/Layout";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
@@ -285,7 +285,8 @@ function PaymentModal({ worker, onClose }) {
     ).map((r) => ({
       id: r.id,
       label: `${db.clients.find((c) => c.id === r.clientId)?.name || "?"} · ${fmtDate(r.dateIn, lang)}`,
-      amount: Math.round((Number(r.total) * Number(worker.pay?.percent || 0)) / 100),
+      // commission is on the garage's own revenue (HT) — VAT is collected for the state
+      amount: Math.round((repairAmounts(r).subtotal * Number(worker.pay?.percent || 0)) / 100),
     })), [db, worker, lang]);
 
   const base = worker.pay?.enabled ? Number(worker.pay.amount) : 0;

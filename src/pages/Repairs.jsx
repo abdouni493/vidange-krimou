@@ -2,12 +2,13 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarPlus, Wrench, Eye, Pencil, Trash2, Wallet, CheckCircle2, Ban,
-  Plus, X, Car, User, Phone, Package, Minus,
+  Plus, X, Car, User, Phone, Package, Minus, Printer, FileText,
 } from "lucide-react";
 import { useApp } from "../context";
 import {
   uid, todayISO, fmtMoney, fmtDate, paidOf, presetRange, inRange,
   serviceNamesOf, restockRepair, consumeRepairStock,
+  printHTML, esc, repairAmounts, DEFAULT_TVA_RATE,
 } from "../store";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
@@ -239,6 +240,37 @@ export function WorkerPicker({ selected, onChange }) {
   );
 }
 
+// ========== TVA ==========
+
+// Optional VAT on top of the HT base — defaults to 19%, editable.
+function TvaSection({ on, setOn, rate, setRate, base, tva, total }) {
+  const { t } = useApp();
+  return (
+    <div className="space-y-3 rounded-xl border border-primary-200 bg-white/70 p-3.5">
+      <label className="flex cursor-pointer items-center gap-2.5">
+        <input type="checkbox" className="h-4 w-4 accent-primary-600" checked={on}
+          onChange={(e) => setOn(e.target.checked)} />
+        <span className="text-sm font-semibold text-primary-900">{t("Appliquer la TVA")}</span>
+        {!on && <span className="text-xs text-slate-400">({DEFAULT_TVA_RATE}% {t("par défaut")})</span>}
+      </label>
+      <AnimatePresence initial={false}>
+        {on && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }} className="space-y-2.5 overflow-hidden">
+            <Field label={t("Taux de TVA (%)")}>
+              <Input type="number" min="0" max="100" step="0.1" value={rate}
+                onChange={(e) => setRate(e.target.value)} />
+            </Field>
+            <MoneyLine label={t("Total HT")} value={fmtMoney(base)} />
+            <MoneyLine label={`${t("TVA")} (${Number(rate) || 0}%)`} value={fmtMoney(tva)} color="text-accent-600" />
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <MoneyLine label={t(on ? "Total TTC" : "Total à payer")} value={fmtMoney(total)} big />
+    </div>
+  );
+}
+
 // ========== helpers ==========
 const useAutoTotal = (db, serviceIds, products) =>
   useMemo(() => {
@@ -273,13 +305,17 @@ function RepairWizard({ mode, editing, onClose }) {
     editing?.workers || (!isAppt && currentUser?.kind === "worker" ? [currentUser.id] : [])
   );
   const [totalEdited, setTotalEdited] = useState(!!editing);
-  const [total, setTotal] = useState(editing?.total ?? 0);
+  const [total, setTotal] = useState(editing?.subtotal ?? editing?.total ?? 0); // HT base
+  const [tvaOn, setTvaOn] = useState(!!editing?.tva?.enabled);
+  const [tvaRate, setTvaRate] = useState(editing?.tva?.rate ?? DEFAULT_TVA_RATE);
   const [paid, setPaid] = useState(editing ? paidOf(editing.payments) : null); // null => not yet initialized
 
   const autoTotal = useAutoTotal(db, serviceIds, products);
-  const shownTotal = totalEdited ? total : autoTotal;
-  const shownPaid = paid === null ? shownTotal : paid;
-  const rest = Math.max(0, Number(shownTotal) - Number(shownPaid));
+  const baseHT = Number(totalEdited ? total : autoTotal) || 0;
+  const tvaAmount = tvaOn ? Math.round((baseHT * (Number(tvaRate) || 0)) / 100) : 0;
+  const grandTotal = baseHT + tvaAmount;
+  const shownPaid = paid === null ? grandTotal : paid;
+  const rest = Math.max(0, grandTotal - Number(shownPaid));
 
   const steps = isAppt
     ? [t("Date"), t("Client"), t("Véhicule"), t("Services"), t("Résumé")]
@@ -307,7 +343,9 @@ function RepairWizard({ mode, editing, onClose }) {
       clientId, car, problem,
       services: serviceIds.map((id) => ({ serviceId: id })),
       products,
-      total: Number(shownTotal),
+      subtotal: baseHT,
+      tva: { enabled: tvaOn, rate: Number(tvaRate) || 0, amount: tvaAmount },
+      total: grandTotal,
       payments: editing ? editing.payments : shownPaid > 0 ? [{ id: uid(), amount: Number(shownPaid), date: todayISO() }] : [],
       workers,
       createdAt: editing?.createdAt || todayISO(),
@@ -417,15 +455,15 @@ function RepairWizard({ mode, editing, onClose }) {
           </Field>
         )}
         <div className="space-y-3 rounded-xl border-2 border-primary-200 bg-primary-50/50 p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label={t("Total (modifiable)")}>
-              <Input type="number" min="0" value={shownTotal}
-                onChange={(e) => { setTotalEdited(true); setTotal(Number(e.target.value)); if (paid === null) setPaid(null); }} />
-            </Field>
-            <Field label={t("Le client paie")}>
-              <Input type="number" min="0" value={shownPaid} onChange={(e) => setPaid(Number(e.target.value))} />
-            </Field>
-          </div>
+          <Field label={t("Total HT (modifiable)")}>
+            <Input type="number" min="0" value={baseHT}
+              onChange={(e) => { setTotalEdited(true); setTotal(Number(e.target.value)); }} />
+          </Field>
+          <TvaSection on={tvaOn} setOn={setTvaOn} rate={tvaRate} setRate={setTvaRate}
+            base={baseHT} tva={tvaAmount} total={grandTotal} />
+          <Field label={t("Le client paie")}>
+            <Input type="number" min="0" value={shownPaid} onChange={(e) => setPaid(Number(e.target.value))} />
+          </Field>
           <MoneyLine label={t("Reste")} value={fmtMoney(rest)} color={rest > 0 ? "text-red-500" : "text-emerald-600"} big />
         </div>
       </div>
@@ -513,11 +551,15 @@ function FinalizeModal({ repair, onClose }) {
   const already = paidOf(repair.payments);
   const autoNew = useAutoTotal(db, serviceIds, [...repair.products, ...newProducts]);
   const [totalEdited, setTotalEdited] = useState(false);
-  const [total, setTotal] = useState(repair.total);
-  const shownTotal = totalEdited ? total : Math.max(autoNew, repair.total);
-  const rest = Math.max(0, Number(shownTotal) - already);
+  const [total, setTotal] = useState(repair.subtotal ?? repair.total); // HT base
+  const [tvaOn, setTvaOn] = useState(!!repair.tva?.enabled);
+  const [tvaRate, setTvaRate] = useState(repair.tva?.rate ?? DEFAULT_TVA_RATE);
+  const baseHT = Number(totalEdited ? total : Math.max(autoNew, Number(repair.subtotal ?? repair.total) || 0)) || 0;
+  const tvaAmount = tvaOn ? Math.round((baseHT * (Number(tvaRate) || 0)) / 100) : 0;
+  const grandTotal = baseHT + tvaAmount;
+  const rest = Math.max(0, grandTotal - already);
   const [amount, setAmount] = useState(rest);
-  const newRest = Math.max(0, Number(shownTotal) - already - Number(amount || 0));
+  const newRest = Math.max(0, grandTotal - already - Number(amount || 0));
 
   const save = () => {
     update((d) => {
@@ -526,7 +568,9 @@ function FinalizeModal({ repair, onClose }) {
       consumeRepairStock(d, newProducts);
       r.services = serviceIds.map((id) => ({ serviceId: id }));
       r.products = [...r.products, ...newProducts];
-      r.total = Number(shownTotal);
+      r.subtotal = baseHT;
+      r.tva = { enabled: tvaOn, rate: Number(tvaRate) || 0, amount: tvaAmount };
+      r.total = grandTotal;
       if (Number(amount) > 0) r.payments.push({ id: uid(), amount: Number(amount), date: todayISO() });
       r.workers = workers;
       r.status = "finalized";
@@ -548,15 +592,15 @@ function FinalizeModal({ repair, onClose }) {
           <WorkerPicker selected={workers} onChange={setWorkers} />
         </Field>
         <div className="space-y-3 rounded-xl border-2 border-primary-200 bg-primary-50/50 p-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Field label={t("Total (modifiable)")}>
-              <Input type="number" min="0" value={shownTotal}
-                onChange={(e) => { setTotalEdited(true); setTotal(Number(e.target.value)); }} />
-            </Field>
-            <Field label={t("Payer maintenant")}>
-              <Input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
-            </Field>
-          </div>
+          <Field label={t("Total HT (modifiable)")}>
+            <Input type="number" min="0" value={baseHT}
+              onChange={(e) => { setTotalEdited(true); setTotal(Number(e.target.value)); }} />
+          </Field>
+          <TvaSection on={tvaOn} setOn={setTvaOn} rate={tvaRate} setRate={setTvaRate}
+            base={baseHT} tva={tvaAmount} total={grandTotal} />
+          <Field label={t("Payer maintenant")}>
+            <Input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </Field>
           <MoneyLine label={t("Déjà payé")} value={fmtMoney(already)} color="text-emerald-600" />
           <MoneyLine label={t("Reste")} value={fmtMoney(newRest)} color={newRest > 0 ? "text-red-500" : "text-emerald-600"} big />
         </div>
@@ -570,10 +614,19 @@ function FinalizeModal({ repair, onClose }) {
 function ViewModal({ repair, onClose }) {
   const { db, t, lang } = useApp();
   const client = db.clients.find((c) => c.id === repair.clientId);
-  const already = paidOf(repair.payments);
-  const rest = Math.max(0, repair.total - already);
+  const { subtotal, tvaEnabled, tvaRate, tva, total, paid: already, rest } = repairAmounts(repair);
   return (
-    <Modal open onClose={onClose} title={t("Détails")} width="max-w-xl">
+    <Modal open onClose={onClose} title={t("Détails")} width="max-w-xl"
+      footer={
+        <>
+          <Btn variant="soft" icon={FileText} onClick={() => printRepairDoc(repair, db, t, lang, "order")}>
+            {t("Bon de réparation")}
+          </Btn>
+          <Btn icon={Printer} onClick={() => printRepairDoc(repair, db, t, lang, "invoice")}>
+            {t("Facture")}
+          </Btn>
+        </>
+      }>
       <div className="mb-3 flex items-center gap-2">
         <Badge color={repair.type === "appointment" ? "blue" : "violet"}>
           {t(repair.type === "appointment" ? "Rendez-vous" : "Réparation")}
@@ -604,7 +657,13 @@ function ViewModal({ repair, onClose }) {
         )}
       </div>
       <div className="mt-4 space-y-2 rounded-xl bg-primary-50 p-4">
-        <MoneyLine label={t("Total")} value={fmtMoney(repair.total)} big />
+        {tvaEnabled && (
+          <>
+            <MoneyLine label={t("Total HT")} value={fmtMoney(subtotal)} />
+            <MoneyLine label={`${t("TVA")} (${tvaRate}%)`} value={fmtMoney(tva)} color="text-accent-600" />
+          </>
+        )}
+        <MoneyLine label={t(tvaEnabled ? "Total TTC" : "Total")} value={fmtMoney(total)} big />
         <MoneyLine label={t("Payé")} value={fmtMoney(already)} color="text-emerald-600" />
         <MoneyLine label={t("Reste")} value={fmtMoney(rest)} color={rest > 0 ? "text-red-500" : "text-emerald-600"} />
       </div>
@@ -616,6 +675,149 @@ function ViewModal({ repair, onClose }) {
       )}
     </Modal>
   );
+}
+
+// ========== Printable documents (facture / bon de réparation) ==========
+
+const STATUS_LABEL = { pending: "En attente", finalized: "Finalisé", canceled: "Annulé" };
+
+// kind: "invoice" -> FACTURE | "order" -> BON DE RÉPARATION (same layout, different title)
+export function printRepairDoc(repair, db, t, lang, kind = "invoice") {
+  const s = db.settings || {};
+  const client = db.clients.find((c) => c.id === repair.clientId);
+  const car = repair.car || {};
+  const isInvoice = kind === "invoice";
+  const { subtotal, tvaEnabled, tvaRate, tva, total, paid, rest } = repairAmounts(repair);
+  const docTitle = isInvoice ? t("FACTURE") : t("BON DE RÉPARATION");
+  const ref = `${isInvoice ? "FAC" : "BR"}-${String(repair.id).slice(-6).toUpperCase()}`;
+  const dt = (iso) => (iso ? `${fmtDate(iso, lang)}${iso.slice(11, 16) ? ` · ${iso.slice(11, 16)}` : ""}` : "—");
+
+  const line = (name, sub, type, qty, unit) => `<tr>
+    <td><b>${esc(name)}</b>${sub ? `<div class="dim">${esc(sub)}</div>` : ""}</td>
+    <td>${esc(type)}</td>
+    <td class="num">${qty}</td>
+    <td class="num">${fmtMoney(unit)}</td>
+    <td class="num">${fmtMoney(unit * qty)}</td>
+  </tr>`;
+
+  const rows = [
+    ...(repair.services || []).map((it) => {
+      const sv = db.services.find((x) => x.id === it.serviceId);
+      return sv ? line(sv.name, sv.description, t("Service"), 1, Number(sv.price) || 0) : "";
+    }),
+    ...(repair.products || []).map((it) => {
+      const p = db.products.find((x) => x.id === it.productId);
+      if (!p) return "";
+      return line(p.name, p.brand, t("Pièce"), Number(it.qty) || 1, Number(p.salePrice || p.purchasePrice) || 0);
+    }),
+  ].filter(Boolean).join("");
+
+  const workerNames = (repair.workers || [])
+    .map((id) => db.workers.find((w) => w.id === id)?.fullName)
+    .filter(Boolean).join(", ");
+
+  const payRows = (repair.payments || [])
+    .map((p) => `<tr><td>${fmtDate(p.date, lang)}</td><td class="num">${fmtMoney(p.amount)}</td></tr>`)
+    .join("");
+
+  const orgLine = (label, value) => (value ? `<b>${esc(label)}:</b> ${esc(value)}` : "");
+  const fiscal = [orgLine("NIF", s.nif), orgLine("NIS", s.nis)].filter(Boolean).join(" · ");
+  const legal = [orgLine("RC", s.rc), orgLine(t("Article"), s.article)].filter(Boolean).join(" · ");
+
+  printHTML(`${docTitle} ${ref}`, `
+    <div class="doc-head">
+      <div class="doc-brand">
+        ${s.logo
+          ? `<img src="${esc(s.logo)}" alt="logo"/>`
+          : `<div class="logo-ph">${esc((s.name || "G").trim().slice(0, 1).toUpperCase())}</div>`}
+        <div>
+          <div class="nm">${esc(s.name || "—")}</div>
+          ${s.description ? `<div class="tag">${esc(s.description)}</div>` : ""}
+        </div>
+      </div>
+      <div class="doc-title">
+        <h1>${esc(docTitle)}</h1>
+        <div class="rule"></div>
+      </div>
+      <div class="doc-org">
+        ${s.address ? `${esc(s.address)}<br/>` : ""}
+        ${s.phone ? `${orgLine(t("Tél"), s.phone)}<br/>` : ""}
+        ${s.email ? `${esc(s.email)}<br/>` : ""}
+        ${fiscal ? `${fiscal}<br/>` : ""}
+        ${legal}
+      </div>
+    </div>
+
+    <div class="doc-meta">
+      <div><span>${t("Référence")}:</span> <b>${ref}</b></div>
+      <div><span>${t("Date")}:</span> <b>${fmtDate(repair.createdAt || repair.dateIn, lang)}</b></div>
+      <div><span>${t("Type")}:</span> <b>${t(repair.type === "appointment" ? "Rendez-vous" : "Réparation")}</b></div>
+      <div><span>${t("Statut")}:</span> <b>${t(STATUS_LABEL[repair.status] || "En attente")}</b></div>
+    </div>
+
+    <div class="grid2">
+      <div class="box">
+        <h3>${t("Client")}</h3>
+        <div class="kv"><span>${t("Nom")}</span><b>${esc(client?.name || "—")}</b></div>
+        <div class="kv"><span>${t("Téléphone")}</span><b>${esc(client?.phone || "—")}</b></div>
+        <div class="kv"><span>${t("Client depuis")}</span><b>${client?.createdAt ? fmtDate(client.createdAt, lang) : "—"}</b></div>
+      </div>
+      <div class="box">
+        <h3>${t("Véhicule")}</h3>
+        <div class="kv"><span>${t("Véhicule")}</span><b>${esc([car.brand, car.name].filter(Boolean).join(" ") || "—")}</b></div>
+        <div class="kv"><span>${t("Immatriculation")}</span><b>${esc(car.plate || "—")}</b></div>
+        <div class="kv"><span>${t("Couleur")} / ${t("Année")}</span><b>${esc([car.color, car.year].filter(Boolean).join(" · ") || "—")}</b></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="box">
+        <h3>${t("Arrivée")} / ${t("Sortie")}</h3>
+        <div class="kv"><span>${t("Arrivée")}</span><b>${dt(repair.dateIn)}</b></div>
+        <div class="kv"><span>${t("Sortie")}</span><b>${dt(repair.dateOut)}</b></div>
+        <div class="kv"><span>${t("Employés assignés")}</span><b>${esc(workerNames || "—")}</b></div>
+      </div>
+      <div class="box">
+        <h3>${t("Problème")}</h3>
+        <p class="note">${esc(repair.problem || "—")}</p>
+        ${car.description ? `<p class="note dim" style="margin-top:6px">${esc(car.description)}</p>` : ""}
+      </div>
+    </div>
+
+    <h2>${t("Services & produits")}</h2>
+    <table>
+      <tr>
+        <th>${t("Désignation")}</th><th>${t("Type")}</th>
+        <th class="num">${t("Qté")}</th><th class="num">${t("Prix unitaire")}</th><th class="num">${t("Total")}</th>
+      </tr>
+      ${rows || `<tr><td colspan="5" class="dim">${t("Aucun service")}</td></tr>`}
+    </table>
+
+    <div class="totals">
+      ${tvaEnabled ? `
+        <div class="row"><span>${t("Total HT")}</span><b>${fmtMoney(subtotal)}</b></div>
+        <div class="row"><span>${t("TVA")} (${tvaRate}%)</span><b>${fmtMoney(tva)}</b></div>` : ""}
+      <div class="row grand"><span>${t(tvaEnabled ? "Total TTC" : "Total à payer")}</span><b>${fmtMoney(total)}</b></div>
+      <div class="row"><span>${t("Payé")}</span><b>${fmtMoney(paid)}</b></div>
+      <div class="row due"><span>${t("Reste")}</span><b>${fmtMoney(rest)}</b></div>
+    </div>
+
+    ${payRows ? `
+      <h2>${t("Historique des paiements")}</h2>
+      <table>
+        <tr><th>${t("Date")}</th><th class="num">${t("Montant")}</th></tr>
+        ${payRows}
+      </table>` : ""}
+
+    <div class="sig">
+      <div>${t("Signature du magasin")}</div>
+      <div>${t("Signature du client")}</div>
+    </div>
+
+    <div class="foot">
+      ${esc(s.name || "")}${s.phone ? ` · ${esc(s.phone)}` : ""}${s.email ? ` · ${esc(s.email)}` : ""}
+    </div>
+  `, lang === "ar" ? "rtl" : "ltr");
 }
 
 // ========== Main page ==========
@@ -749,6 +951,10 @@ export default function Repairs() {
                 </p>
                 <div className="mt-auto flex flex-wrap items-center gap-1 border-t border-primary-50 pt-3">
                   <IconBtn icon={Eye} title={t("Voir")} onClick={() => setViewing(r)} />
+                  <IconBtn icon={Printer} title={t("Imprimer la facture")}
+                    onClick={() => printRepairDoc(r, db, t, lang, "invoice")} />
+                  <IconBtn icon={FileText} title={t("Imprimer le bon de réparation")}
+                    onClick={() => printRepairDoc(r, db, t, lang, "order")} />
                   {can("repairs", "edit") && <IconBtn icon={Pencil} title={t("Modifier")} onClick={() => setWizard({ mode: r.type, editing: r })} />}
                   {can("repairs", "pay") && rest > 0 && r.status !== "canceled" && (
                     <IconBtn icon={Wallet} title={t("Payer dette")} variant="soft" onClick={() => setPaying(r)} />

@@ -430,6 +430,19 @@ export const repairTotalFromItems = (rep, db) => {
   return sTotal + pTotal;
 };
 
+// TVA / totals breakdown of a repair — tolerant of old records without `tva`
+export const DEFAULT_TVA_RATE = 19;
+
+export const repairAmounts = (rep) => {
+  const total = Number(rep?.total) || 0;
+  const enabled = !!rep?.tva?.enabled;
+  const rate = Number(rep?.tva?.rate ?? DEFAULT_TVA_RATE);
+  const subtotal = Number(rep?.subtotal ?? total) || 0;
+  const tva = enabled ? Number(rep?.tva?.amount ?? Math.round((subtotal * rate) / 100)) : 0;
+  const paid = paidOf(rep?.payments);
+  return { subtotal, tvaEnabled: enabled, tvaRate: rate, tva, total, paid, rest: Math.max(0, total - paid) };
+};
+
 export const serviceNamesOf = (rep, db) =>
   (rep.services || []).map((it) => {
     if (it.serviceId) {
@@ -469,16 +482,23 @@ export const applyPurchaseToStock = (db, purchase, sign = 1) => {
 };
 
 // ---- print helper (invoices / reports) ----
-export function printHTML(title, bodyHtml) {
+
+// Escape user-supplied values before injecting them into printed HTML
+export const esc = (v) =>
+  String(v ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+export function printHTML(title, bodyHtml, dir = "ltr") {
   const w = window.open("", "_blank", "width=900,height=700");
   if (!w) return;
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>
+  w.document.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><title>${esc(title)}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; color: #1e1b31; padding: 32px; font-size: 13px; }
     h1 { font-size: 20px; } h2 { font-size: 15px; margin: 14px 0 6px; color: #4c1d95; }
     table { width: 100%; border-collapse: collapse; margin: 10px 0; }
-    th { background: #f5f3ff; color: #4c1d95; text-align: left; }
+    th { background: #f5f3ff; color: #4c1d95; text-align: start; }
     th, td { border: 1px solid #ddd6fe; padding: 7px 10px; }
     .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #7c3aed; padding-bottom: 14px; margin-bottom: 18px; }
     .muted { color: #6b7280; font-size: 12px; }
@@ -486,7 +506,56 @@ export function printHTML(title, bodyHtml) {
     .sig { display: flex; justify-content: space-between; margin-top: 60px; }
     .sig div { width: 220px; border-top: 1px solid #999; padding-top: 6px; text-align: center; font-size: 12px; }
     .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; background: #ede9fe; color: #6d28d9; font-size: 11px; font-weight: 600; }
-    @media print { body { padding: 12px; } }
+
+    /* ===== Document layout (invoice / repair order) ===== */
+    .doc-head { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 18px;
+                border-bottom: 3px solid #7c3aed; padding-bottom: 16px; margin-bottom: 4px; }
+    .doc-brand { display: flex; align-items: center; gap: 12px; }
+    .doc-brand img { width: 66px; height: 66px; object-fit: contain; border-radius: 10px; border: 1px solid #ede9fe; background: #fff; }
+    .doc-brand .logo-ph { width: 66px; height: 66px; border-radius: 10px; background: #f5f3ff; border: 1px solid #ddd6fe;
+                          display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 800; color: #7c3aed; }
+    .doc-brand .nm { font-size: 17px; font-weight: 800; color: #4c1d95; line-height: 1.25; }
+    .doc-brand .tag { font-size: 11px; color: #6b7280; margin-top: 2px; max-width: 210px; }
+    .doc-title { text-align: center; }
+    .doc-title h1 { font-size: 25px; letter-spacing: 3px; text-transform: uppercase; color: #4c1d95; font-weight: 800; white-space: nowrap; }
+    .doc-title .rule { height: 3px; width: 62px; margin: 7px auto 0; background: #7c3aed; border-radius: 3px; }
+    .doc-org { text-align: end; font-size: 11px; color: #4b5563; line-height: 1.75; }
+    .doc-org b { color: #1e1b31; }
+
+    .doc-meta { display: flex; flex-wrap: wrap; gap: 8px 22px; justify-content: space-between;
+                background: #faf9ff; border: 1px solid #ede9fe; border-radius: 8px;
+                padding: 9px 14px; margin: 14px 0 16px; font-size: 12px; }
+    .doc-meta span { color: #6b7280; }
+    .doc-meta b { color: #1e1b31; }
+
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+    .box { border: 1px solid #ddd6fe; border-radius: 8px; padding: 11px 14px; }
+    .box h3 { font-size: 10.5px; text-transform: uppercase; letter-spacing: 1.2px; color: #7c3aed;
+              margin-bottom: 7px; padding-bottom: 5px; border-bottom: 1px solid #f0edff; }
+    .kv { display: flex; justify-content: space-between; gap: 12px; padding: 3.5px 0; font-size: 12px; }
+    .kv span { color: #6b7280; }
+    .kv b { color: #1e1b31; text-align: end; font-weight: 600; }
+    .note { font-size: 12.5px; color: #374151; line-height: 1.6; white-space: pre-wrap; }
+    .num { text-align: end; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .dim { color: #9ca3af; font-size: 11px; }
+
+    .totals { width: 320px; margin-inline-start: auto; margin-top: 12px; }
+    .totals .row { display: flex; justify-content: space-between; gap: 14px; padding: 7px 12px;
+                   font-size: 12.5px; border-bottom: 1px solid #f0edff; }
+    .totals .row span { color: #6b7280; }
+    .totals .row b { font-variant-numeric: tabular-nums; }
+    .totals .grand { background: #f5f3ff; border: 1.5px solid #7c3aed; border-radius: 8px;
+                     margin-top: 6px; padding: 10px 12px; font-size: 15px; font-weight: 800; color: #4c1d95; }
+    .totals .grand span { color: #4c1d95; font-weight: 800; }
+    .totals .due { font-weight: 700; }
+
+    .foot { margin-top: 26px; padding-top: 12px; border-top: 1px solid #ede9fe; text-align: center;
+            font-size: 10.5px; color: #9ca3af; line-height: 1.7; }
+
+    @media print {
+      body { padding: 10px; }
+      .doc-head, .box, .totals, table { break-inside: avoid; }
+    }
   </style></head><body>${bodyHtml}
   <script>window.onload = () => { window.print(); }<\/script></body></html>`);
   w.document.close();

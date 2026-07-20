@@ -51,7 +51,7 @@ export const presetRange = (preset) => {
 
 // ---- permissions catalog ----
 export const PAGES = [
-  "dashboard", "repairs", "services", "stock", "purchases", "clients",
+  "dashboard", "repairs", "services", "stock", "barcodes", "purchases", "clients",
   "suppliers", "workers", "expenses", "caisse", "reports", "settings",
 ];
 
@@ -60,6 +60,7 @@ export const PAGE_ACTIONS = {
   repairs: ["view", "create", "edit", "delete", "pay", "finalize", "cancel"],
   services: ["view", "create", "edit", "delete"],
   stock: ["view", "create", "edit", "delete"],
+  barcodes: ["view", "create", "delete", "print"],
   purchases: ["view", "create", "edit", "delete", "pay", "print"],
   clients: ["view", "create", "edit", "delete", "history"],
   suppliers: ["view", "create", "edit", "delete", "history"],
@@ -380,6 +381,7 @@ export function seedDB() {
     ],
     clients, services, categories, products, suppliers, purchases, repairs,
     workers, roles, expenseCategories, expenses, caisseCategories, caisse,
+    barcodes: [],
     counters: { purchase: 6 },
     settings: {
       logo: "",
@@ -397,7 +399,12 @@ export function seedDB() {
 export function loadDB() {
   try {
     const raw = localStorage.getItem(DB_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const db = JSON.parse(raw);
+      // Collections added after a database was first saved
+      if (!Array.isArray(db.barcodes)) db.barcodes = [];
+      return db;
+    }
   } catch (e) { /* corrupted -> reseed */ }
   const db = seedDB();
   localStorage.setItem(DB_KEY, JSON.stringify(db));

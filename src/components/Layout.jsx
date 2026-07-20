@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Wrench, Sparkles, Boxes, ShoppingCart, Users, Truck,
   HardHat, Receipt, Landmark, BarChart3, Settings, LogOut, Menu, X, Languages,
+  Barcode,
 } from "lucide-react";
 import { useApp } from "../context";
 
@@ -11,6 +12,7 @@ export const NAV = [
   { key: "repairs", label: "Réparations & RDV", icon: Wrench },
   { key: "services", label: "Services", icon: Sparkles },
   { key: "stock", label: "Gestion de stock", icon: Boxes },
+  { key: "barcodes", label: "Codes-barres", icon: Barcode },
   { key: "purchases", label: "Achats", icon: ShoppingCart },
   { key: "clients", label: "Clients", icon: Users },
   { key: "suppliers", label: "Fournisseurs", icon: Truck },

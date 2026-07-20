@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Repairs from "./pages/Repairs";
 import Services from "./pages/Services";
 import Stock from "./pages/Stock";
+import Barcodes from "./pages/Barcodes";
 import Purchases from "./pages/Purchases";
 import Clients from "./pages/Clients";
 import Suppliers from "./pages/Suppliers";
@@ -18,6 +19,7 @@ import Settings from "./pages/Settings";
 
 const PAGES = {
   dashboard: Dashboard, repairs: Repairs, services: Services, stock: Stock,
+  barcodes: Barcodes,
   purchases: Purchases, clients: Clients, suppliers: Suppliers, workers: Workers,
   expenses: Expenses, caisse: Caisse, reports: Reports, settings: Settings,
 };

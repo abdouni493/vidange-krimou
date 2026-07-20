@@ -153,29 +153,26 @@ export default function Layout({ page, setPage, children }) {
               onClick={() => setMobileOpen(true)} aria-label="Menu">
               <Menu size={20} />
             </button>
-            <AnimatePresence mode="wait">
-              <motion.span key={page} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.18 }}
-                className="text-sm font-semibold text-slate-500">
-                {current ? t(current.label) : ""}
-              </motion.span>
-            </AnimatePresence>
+            <motion.span key={page} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+              className="text-sm font-semibold text-slate-500">
+              {current ? t(current.label) : ""}
+            </motion.span>
           </div>
           <LangSwitch />
         </header>
 
         <main className="px-4 py-6 sm:px-8">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={page}
-              initial={{ opacity: 0, y: 22 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -14 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            >
-              {children}
-            </motion.div>
-          </AnimatePresence>
+          {/* Keyed remount plays the entrance animation on every navigation.
+              No exit animation = no AnimatePresence "wait" that can freeze mid-transition. */}
+          <motion.div
+            key={page}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+          >
+            {children}
+          </motion.div>
         </main>
       </div>
     </div>

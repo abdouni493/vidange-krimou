@@ -2,6 +2,8 @@
 // Self-contained (no library) so the same renderer feeds both the on-screen
 // preview and the printed label sheet.
 
+import { printHTML, esc, fmtMoney } from "./store";
+
 // Module patterns for the three EAN-13 alphabets
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
 const G = ["0100111","0110011","0011011","0100001","0011101","0111001","0000101","0010001","0001001","0010111"];
@@ -89,4 +91,64 @@ export function ean13Svg(value, { height = 70, showText = true, color = "#111827
     + `width="100%" preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges" `
     + `role="img" aria-label="Code-barres ${code}">`
     + `<rect x="0" y="0" width="${TOTAL}" height="${vbHeight}" fill="#ffffff"/>${bars}${text}</svg>`;
+}
+
+// ===== Printable label sheet =====
+// Shared by the Codes-barres library and the product sheet, so a label printed
+// from either place comes out identical.
+
+// Physical label formats (mm) + matching print font sizes
+export const LABEL_SIZES = {
+  small: { w: 38, h: 24, name: 6, price: 7.5, store: 5, label: "38 × 24 mm" },
+  medium: { w: 50, h: 30, name: 7.5, price: 9.5, store: 6, label: "50 × 30 mm" },
+  large: { w: 70, h: 40, name: 9.5, price: 12, store: 7, label: "70 × 40 mm" },
+};
+
+export const DEFAULT_LABEL_OPTS = {
+  showName: true, showPrice: true, showCode: true, showStore: false, cutLines: true,
+};
+
+/**
+ * @param entries  [{ name, code, price, copies }]
+ * @param size     key of LABEL_SIZES
+ * @param opts     DEFAULT_LABEL_OPTS shape
+ * @param store    garage name, printed when `opts.showStore`
+ */
+export function printLabels(entries, { size = "medium", opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr" } = {}) {
+  const list = (entries || []).filter(Boolean);
+  if (!list.length) return;
+  const S = LABEL_SIZES[size] || LABEL_SIZES.medium;
+
+  const label = (e) => `
+    <div class="lbl">
+      ${opts.showStore && store ? `<div class="lbl-s">${esc(store)}</div>` : ""}
+      ${opts.showName ? `<div class="lbl-n">${esc(e.name)}</div>` : ""}
+      <div class="lbl-b">${ean13Svg(e.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode })}</div>
+      ${opts.showPrice && Number(e.price) > 0 ? `<div class="lbl-p">${esc(fmtMoney(e.price))}</div>` : ""}
+    </div>`;
+
+  const cells = list
+    .flatMap((e) => Array.from({ length: Math.max(1, Number(e.copies) || 1) }, () => label(e)))
+    .join("");
+
+  printHTML(title, `
+    <style>
+      body { padding: 8mm; }
+      .sheet { display: flex; flex-wrap: wrap; gap: 3mm; align-content: flex-start; }
+      .lbl {
+        width: ${S.w}mm; height: ${S.h}mm; padding: 1.5mm 2mm; overflow: hidden;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4mm;
+        break-inside: avoid; page-break-inside: avoid; background: #fff;
+        ${opts.cutLines ? "border: 0.3mm dashed #cbd5e1; border-radius: 1.5mm;" : ""}
+      }
+      .lbl-s { font-size: ${S.store}pt; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
+      .lbl-n { font-size: ${S.name}pt; font-weight: 700; text-align: center; line-height: 1.15;
+               display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+      .lbl-b { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
+      .lbl-b svg { width: 100%; height: 100%; }
+      .lbl-p { font-size: ${S.price}pt; font-weight: 800; font-family: monospace; }
+      @media print { body { padding: 4mm; } }
+    </style>
+    <div class="sheet">${cells}</div>
+  `, dir);
 }

@@ -5,11 +5,14 @@ import {
 } from "lucide-react";
 import { useApp } from "../context";
 import {
-  uid, todayISO, fmtMoney, fmtDate, paidOf, applyPurchaseToStock, printHTML,
+  uid, todayISO, fmtMoney, fmtDate, paidOf, applyPurchaseToStock,
+  printHTML, esc, docHead, docStamp,
+  searchProducts,
 } from "../store";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Select, SearchBox, Empty,
   PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, MoneyLine, Steps,
+  StepPane,
 } from "../components/ui";
 import { ProductForm } from "./Stock";
 
@@ -47,15 +50,20 @@ function PurchaseWizard({ editing, onClose }) {
   const shownPaid = paid === null ? total : paid;
   const rest = Math.max(0, total - Number(shownPaid));
 
-  const results = q
-    ? db.products.filter(
-        (p) => p.name.toLowerCase().includes(q.toLowerCase()) || (p.barcode || "").includes(q)
-      ).slice(0, 6)
-    : [];
+  // Même recherche tolérante que la réparation et le point de vente : accents,
+  // casse, marque, description et code-barres.
+  const results = q ? searchProducts(db.products, q, 8) : [];
 
   const addProduct = (p) => {
     if (!items.some((i) => i.productId === p.id))
-      setItems([...items, { productId: p.id, qty: 1, price: p.purchasePrice || 0, minQty: p.minQty ?? 5, expiration: p.expiration || "" }]);
+      setItems([...items, {
+        productId: p.id,
+        qty: 1,
+        price: p.purchasePrice || 0,
+        salePrice: p.salePrice || 0,
+        minQty: p.minQty ?? 5,
+        expiration: p.expiration || "",
+      }]);
     setQ("");
   };
   const setItem = (id, patch) =>
@@ -72,12 +80,22 @@ function PurchaseWizard({ editing, onClose }) {
 
   const validate = (s) => {
     setErr("");
-    if (s === 0 && items.length === 0) { setErr(t("Ajoutez au moins un produit")); return false; }
+    if (s === 0) {
+      if (items.length === 0) { setErr(t("Ajoutez au moins un produit")); return false; }
+      const missing = items.find((it) => {
+        const p = db.products.find((x) => x.id === it.productId);
+        return p?.trackExpiration && !it.expiration;
+      });
+      if (missing) { setErr(t("Renseignez la date d'expiration des produits concernés")); return false; }
+    }
     if (s === 1 && !supplierId) { setErr(t("Veuillez sélectionner un fournisseur")); return false; }
     return true;
   };
 
   const save = () => {
+    // Guard the final action too: the summary step can be reached, then edited back
+    if (!validate(0)) { setStep(0); return; }
+    if (!validate(1)) { setStep(1); return; }
     update((d) => {
       if (editing) {
         const old = d.purchases.find((x) => x.id === editing.id);
@@ -113,9 +131,8 @@ function PurchaseWizard({ editing, onClose }) {
           </>
         }>
         <Steps labels={steps} current={step} />
-        <AnimatePresence mode="wait">
-          <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.2 }}>
+        <StepPane step={step}>
+          <div>
             {step === 0 && (
               <div className="space-y-4">
                 <div className="flex gap-2">
@@ -142,27 +159,52 @@ function PurchaseWizard({ editing, onClose }) {
                   {items.map((it) => {
                     const p = db.products.find((x) => x.id === it.productId);
                     if (!p) return null;
+                    const margin = (Number(it.salePrice) || 0) - (Number(it.price) || 0);
                     return (
                       <motion.div key={it.productId} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                         className="rounded-xl border border-primary-100 bg-white p-3.5">
-                        <div className="mb-2.5 flex items-center justify-between">
-                          <p className="text-sm font-bold text-primary-900">{p.name}</p>
+                        <div className="mb-2.5 flex items-center justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-bold text-primary-900">{p.name}</p>
+                            <p className="text-[11px] text-slate-400">
+                              {t("Stock actuel")} : <span className="font-mono">{p.qtyCurrent}</span>
+                              {Number(it.qty) > 0 && (
+                                <> → <span className="font-mono font-semibold text-emerald-600">
+                                  {(Number(p.qtyCurrent) || 0) + (Number(it.qty) || 0)}
+                                </span></>
+                              )}
+                            </p>
+                          </div>
                           <IconBtn icon={X} title={t("Supprimer")} variant="danger"
                             onClick={() => setItems(items.filter((i) => i.productId !== it.productId))} />
                         </div>
                         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                          <Field label={t("Qté")}>
-                            <Input type="number" min="1" value={it.qty} onChange={(e) => setItem(it.productId, { qty: Number(e.target.value) })} />
-                          </Field>
                           <Field label={t("Prix d'achat")}>
-                            <Input type="number" min="0" value={it.price} onChange={(e) => setItem(it.productId, { price: Number(e.target.value) })} />
+                            <Input type="number" min="0" value={it.price}
+                              onChange={(e) => setItem(it.productId, { price: Number(e.target.value) })} />
                           </Field>
-                          <Field label={t("Qté min alerte")}>
-                            <Input type="number" min="0" value={it.minQty} onChange={(e) => setItem(it.productId, { minQty: Number(e.target.value) })} />
+                          <Field label={t("Prix de vente")}
+                            hint={margin ? `${t("Marge")} ${fmtMoney(margin)}` : undefined}>
+                            <Input type="number" min="0" value={it.salePrice ?? 0}
+                              onChange={(e) => setItem(it.productId, { salePrice: Number(e.target.value) })} />
                           </Field>
-                          <Field label={t("Date d'expiration")}>
-                            <Input type="date" value={it.expiration || ""} onChange={(e) => setItem(it.productId, { expiration: e.target.value })} />
+                          <Field label={t("Quantité achetée")}>
+                            <Input type="number" min="1" value={it.qty}
+                              onChange={(e) => setItem(it.productId, { qty: Number(e.target.value) })} />
                           </Field>
+                          <Field label={t("Quantité minimale (alerte)")}>
+                            <Input type="number" min="0" value={it.minQty}
+                              onChange={(e) => setItem(it.productId, { minQty: Number(e.target.value) })} />
+                          </Field>
+                          {/* Only products flagged as perishable on their sheet ask for a date.
+                              `!!` because SQLite hands the flag back as 0/1, and React
+                              would render a bare 0 as text. */}
+                          {!!p.trackExpiration && (
+                            <Field label={t("Date d'expiration")} className="col-span-2 sm:col-span-4">
+                              <Input type="date" value={it.expiration || ""}
+                                onChange={(e) => setItem(it.productId, { expiration: e.target.value })} />
+                            </Field>
+                          )}
                         </div>
                       </motion.div>
                     );
@@ -217,8 +259,8 @@ function PurchaseWizard({ editing, onClose }) {
                 </div>
               </div>
             )}
-          </motion.div>
-        </AnimatePresence>
+          </div>
+        </StepPane>
         {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600" role="alert">{err}</p>}
       </Modal>
       {productModal && <ProductForm onClose={() => setProductModal(false)} onCreated={(p) => addProduct(p)} />}
@@ -297,44 +339,91 @@ function ViewModal({ purchase, onClose }) {
 }
 
 // ===== Print invoice =====
-function printPurchase(purchase, db, t) {
+function printPurchase(purchase, db, t, lang = "fr") {
   const s = db.settings;
   const sup = db.suppliers.find((x) => x.id === purchase.supplierId);
   const already = paidOf(purchase.payments);
+  const rest = Math.max(0, purchase.total - already);
+  const totalQty = purchase.items.reduce((n, it) => n + (Number(it.qty) || 0), 0);
+  const title = t("FACTURE D'ACHAT");
+
   const rows = purchase.items.map((it) => {
     const p = db.products.find((x) => x.id === it.productId);
-    return `<tr><td>${p?.name || "?"}</td><td>${p?.barcode || "—"}</td><td>${it.qty}</td>
-      <td>${fmtMoney(it.price)}</td><td>${fmtMoney(it.price * it.qty)}</td></tr>`;
+    return `<tr>
+      <td><b>${esc(p?.name || "?")}</b>${p?.brand ? `<div class="dim">${esc(p.brand)}</div>` : ""}</td>
+      <td>${esc(p?.barcode || "—")}</td>
+      <td class="num">${Number(it.qty) || 0}</td>
+      <td class="num">${fmtMoney(it.price)}</td>
+      <td class="num">${fmtMoney(it.price * it.qty)}</td>
+    </tr>`;
   }).join("");
-  printHTML(`${t("Facture d'achat")} ${purchase.ref}`, `
-    <div class="head">
-      <div>
-        <h1>${s.name}</h1>
-        <p class="muted">${s.description || ""}</p>
-        <p class="muted">${s.address || ""} · ${s.phone || ""} · ${s.email || ""}</p>
-        <p class="muted">NIF: ${s.nif || "—"} · NIS: ${s.nis || "—"} · RC: ${s.rc || "—"} · Article: ${s.article || "—"}</p>
+
+  const payRows = (purchase.payments || [])
+    .map((p) => `<tr><td>${fmtDate(p.date, lang)}</td><td class="num">${fmtMoney(p.amount)}</td></tr>`)
+    .join("");
+
+  printHTML(`${title} ${purchase.ref}`, `
+    ${docHead(s, title, purchase.ref, t)}
+
+    <div class="doc-meta">
+      <div><span>${t("Référence")}:</span> <b>${esc(purchase.ref)}</b></div>
+      <div><span>${t("Date")}:</span> <b>${fmtDate(purchase.date, lang)}</b></div>
+      <div><span>${t("Articles")}:</span> <b>${purchase.items.length}</b></div>
+    </div>
+
+    <div class="grid2">
+      <div class="box">
+        <h3>${t("Fournisseur")}</h3>
+        <div class="kv"><span>${t("Nom")}</span><b>${esc(sup?.name || "—")}</b></div>
+        <div class="kv"><span>${t("Téléphone")}</span><b>${esc(sup?.phone || "—")}</b></div>
+        <div class="kv"><span>${t("Adresse")}</span><b>${esc(sup?.address || "—")}</b></div>
       </div>
-      <div style="text-align:end">
-        <span class="badge">${t("Facture d'achat")}</span>
-        <h1 style="margin-top:6px">${purchase.ref}</h1>
-        <p class="muted">${t("Date")}: ${fmtDate(purchase.date)}</p>
+      <div class="box">
+        <h3>${t("Détails de l'achat")}</h3>
+        <div class="kv"><span>${t("Références")}</span><b>${purchase.items.length}</b></div>
+        <div class="kv"><span>${t("Quantité totale")}</span><b>${totalQty}</b></div>
+        <div class="kv"><span>${t("Paiements")}</span><b>${(purchase.payments || []).length}</b></div>
       </div>
     </div>
-    <h2>${t("Fournisseur")}</h2>
-    <p><b>${sup?.name || "—"}</b><br/>${sup?.phone || ""}<br/>${sup?.address || ""}</p>
+
     <h2>${t("Produits de l'achat")}</h2>
-    <table>
-      <tr><th>${t("Nom du produit")}</th><th>${t("Code-barres")}</th><th>${t("Qté")}</th><th>${t("Prix d'achat")}</th><th>${t("Total")}</th></tr>
-      ${rows}
-      <tr><td colspan="4" class="tot">${t("Total")}</td><td class="tot">${fmtMoney(purchase.total)}</td></tr>
-      <tr><td colspan="4">${t("Payé")}</td><td>${fmtMoney(already)}</td></tr>
-      <tr><td colspan="4" class="tot">${t("Reste")}</td><td class="tot">${fmtMoney(Math.max(0, purchase.total - already))}</td></tr>
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>${t("Nom du produit")}</th><th>${t("Code-barres")}</th>
+          <th class="num">${t("Qté")}</th><th class="num">${t("Prix d'achat")}</th><th class="num">${t("Total")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows || `<tr><td colspan="5" class="dim">${t("Aucun produit")}</td></tr>`}
+      </tbody>
     </table>
+
+    <div class="totals-wrap">
+      <div>${docStamp(purchase.total, already, t)}</div>
+      <div class="totals">
+        <div class="row grand"><span>${t("Total")}</span><b>${fmtMoney(purchase.total)}</b></div>
+        <div class="row"><span>${t("Payé")}</span><b>${fmtMoney(already)}</b></div>
+        <div class="row due"><span>${t("Reste")}</span><b>${fmtMoney(rest)}</b></div>
+      </div>
+    </div>
+
+    ${payRows ? `
+      <h2>${t("Historique des paiements")}</h2>
+      <table class="doc-table">
+        <thead><tr><th>${t("Date")}</th><th class="num">${t("Montant")}</th></tr></thead>
+        <tbody>${payRows}</tbody>
+      </table>` : ""}
+
     <div class="sig">
       <div>${t("Signature du magasin")}</div>
       <div>${t("Signature du fournisseur")}</div>
     </div>
-  `);
+
+    <div class="foot">
+      ${esc(s.name || "")}${s.phone ? ` · ${esc(s.phone)}` : ""}${s.email ? ` · ${esc(s.email)}` : ""}
+    </div>
+  `, lang === "ar" ? "rtl" : "ltr");
 }
 
 // ===== Main page =====
@@ -360,7 +449,7 @@ export default function Purchases() {
       <IconBtn icon={Eye} title={t("Voir")} onClick={() => setViewing(a)} />
       {can("purchases", "edit") && <IconBtn icon={Pencil} title={t("Modifier")} onClick={() => setWizard({ editing: a })} />}
       {can("purchases", "pay") && rest > 0 && <IconBtn icon={Wallet} title={t("Payer dette")} variant="soft" onClick={() => setPaying(a)} />}
-      {can("purchases", "print") && <IconBtn icon={Printer} title={t("Imprimer")} onClick={() => printPurchase(a, db, t)} />}
+      {can("purchases", "print") && <IconBtn icon={Printer} title={t("Imprimer")} onClick={() => printPurchase(a, db, t, lang)} />}
       {can("purchases", "delete") && <IconBtn icon={Trash2} title={t("Supprimer")} variant="danger" onClick={() => setDeleting(a)} />}
     </div>
   );

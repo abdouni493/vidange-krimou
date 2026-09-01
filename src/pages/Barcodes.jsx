@@ -5,50 +5,15 @@ import {
   Package, CheckCheck, Copy,
 } from "lucide-react";
 import { useApp } from "../context";
-import { uid, todayISO, fmtMoney, fmtDate, printHTML, esc } from "../store";
+import { uid, todayISO, fmtMoney, fmtDate } from "../store";
 import {
-  ean13Svg, randomEan13, normalizeEan13, isValidEan13, onlyDigits, DEFAULT_PREFIX,
+  randomEan13, normalizeEan13, isValidEan13, onlyDigits, DEFAULT_PREFIX,
+  LABEL_SIZES as SIZES, DEFAULT_LABEL_OPTS as DEFAULT_OPTS, printLabels,
 } from "../barcode";
 import {
   Btn, IconBtn, Field, Input, Select, SearchBox, Confirm, Empty,
-  PageHeader, CardGrid, itemRise, Badge, Seg,
+  PageHeader, CardGrid, itemRise, Badge, Seg, BarcodeLabel as LabelPreview,
 } from "../components/ui";
-
-// Physical label formats (mm) + matching print font sizes
-const SIZES = {
-  small: { w: 38, h: 24, name: 6, price: 7.5, store: 5, label: "38 × 24 mm" },
-  medium: { w: 50, h: 30, name: 7.5, price: 9.5, store: 6, label: "50 × 30 mm" },
-  large: { w: 70, h: 40, name: 9.5, price: 12, store: 7, label: "70 × 40 mm" },
-};
-
-const DEFAULT_OPTS = { showName: true, showPrice: true, showCode: true, showStore: false, cutLines: true };
-
-// One label, rendered identically on screen and on paper
-function LabelPreview({ entry, opts }) {
-  const { db } = useApp();
-  const svg = useMemo(
-    () => ean13Svg(entry.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode }),
-    [entry.code, opts.showCode]
-  );
-  return (
-    <div className={`flex flex-col items-center justify-center gap-1 rounded-lg bg-white px-3 py-2.5 ${
-      opts.cutLines ? "border border-dashed border-primary-200" : "border border-transparent"
-    }`}>
-      {opts.showStore && db.settings.name && (
-        <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{db.settings.name}</p>
-      )}
-      {opts.showName && (
-        <p className="line-clamp-2 text-center text-[11px] font-bold leading-tight text-primary-900">
-          {entry.name || "—"}
-        </p>
-      )}
-      <div className="w-full max-w-[210px]" dangerouslySetInnerHTML={{ __html: svg }} />
-      {opts.showPrice && Number(entry.price) > 0 && (
-        <p className="font-mono text-xs font-extrabold text-primary-900">{fmtMoney(entry.price)}</p>
-      )}
-    </div>
-  );
-}
 
 export default function Barcodes() {
   const { db, update, t, lang, can } = useApp();
@@ -133,45 +98,13 @@ export default function Barcodes() {
   const totalLabels = selected.reduce((n, b) => n + copyOf(b.id), 0);
 
   // ---- print ----
-  const print = (entries) => {
-    const list = entries.filter(Boolean);
-    if (!list.length) return;
-    const S = SIZES[size];
-    const store = db.settings.name || "";
-
-    const label = (e) => `
-      <div class="lbl">
-        ${opts.showStore && store ? `<div class="lbl-s">${esc(store)}</div>` : ""}
-        ${opts.showName ? `<div class="lbl-n">${esc(e.name)}</div>` : ""}
-        <div class="lbl-b">${ean13Svg(e.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode })}</div>
-        ${opts.showPrice && Number(e.price) > 0 ? `<div class="lbl-p">${esc(fmtMoney(e.price))}</div>` : ""}
-      </div>`;
-
-    const cells = list
-      .flatMap((e) => Array.from({ length: copyOf(e.id) }, () => label(e)))
-      .join("");
-
-    printHTML(t("Étiquettes code-barres"), `
-      <style>
-        body { padding: 8mm; }
-        .sheet { display: flex; flex-wrap: wrap; gap: 3mm; align-content: flex-start; }
-        .lbl {
-          width: ${S.w}mm; height: ${S.h}mm; padding: 1.5mm 2mm; overflow: hidden;
-          display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4mm;
-          break-inside: avoid; page-break-inside: avoid; background: #fff;
-          ${opts.cutLines ? "border: 0.3mm dashed #cbd5e1; border-radius: 1.5mm;" : ""}
-        }
-        .lbl-s { font-size: ${S.store}pt; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
-        .lbl-n { font-size: ${S.name}pt; font-weight: 700; text-align: center; line-height: 1.15;
-                 display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .lbl-b { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-        .lbl-b svg { width: 100%; height: 100%; }
-        .lbl-p { font-size: ${S.price}pt; font-weight: 800; font-family: monospace; }
-        @media print { body { padding: 4mm; } }
-      </style>
-      <div class="sheet">${cells}</div>
-    `, lang === "ar" ? "rtl" : "ltr");
-  };
+  const print = (entries) =>
+    printLabels((entries || []).map((e) => ({ ...e, copies: copyOf(e.id) })), {
+      size, opts,
+      store: db.settings.name || "",
+      title: t("Étiquettes code-barres"),
+      dir: lang === "ar" ? "rtl" : "ltr",
+    });
 
   const canCreate = can("barcodes", "create");
   const canPrint = can("barcodes", "print");

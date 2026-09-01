@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import styled from "@emotion/styled";
 import { keyframes } from "@emotion/react";
-import { Wrench, User, Mail, Lock, AtSign, Sparkles, Languages, Eye, EyeOff } from "lucide-react";
+import { Wrench, User, Mail, Lock, AtSign, Languages, Eye, EyeOff, Loader2, ShieldPlus, CheckCircle2 } from "lucide-react";
 import { useApp } from "../context";
 import { Btn, Field, Input } from "../components/ui";
 
@@ -23,21 +23,38 @@ const Blob = styled.div`
 `;
 
 export default function Login() {
-  const { login, register, t, lang, setLang } = useApp();
-  const [mode, setMode] = useState("login"); // login | register
+  const { login, register, t, lang, setLang, needsSetup, adminExists } = useApp();
+  // A fresh project has no administrator yet — open straight on the sign-up form.
+  const [mode, setMode] = useState(needsSetup ? "register" : "login");
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({ identifier: "", name: "", username: "", email: "", password: "" });
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  const submit = (e) => {
+  // The administrator is created once. As soon as the project has one, the
+  // sign-up form disappears for good — new staff get an account from the
+  // « Employés » screen, with the permissions the admin grants them.
+  useEffect(() => {
+    if (adminExists && mode === "register") setMode("login");
+  }, [adminExists]);
+
+  const submit = async (e) => {
     e.preventDefault();
     setError("");
-    if (mode === "login") {
-      if (!login(form.identifier, form.password)) setError(t("Identifiants incorrects"));
-    } else {
-      const res = register(form);
-      if (res.error) setError(t(res.error));
+    setNotice("");
+    setBusy(true);
+    try {
+      const res = mode === "login"
+        ? await login(form.identifier, form.password)
+        : await register(form);
+      if (res?.error) setError(t(res.error));
+      else if (res?.notice) { setNotice(t(res.notice)); setMode("login"); }
+    } catch (err) {
+      setError(err.message || String(err));
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -84,19 +101,28 @@ export default function Login() {
           </div>
 
           <div className="px-8 py-7">
-            {/* Tabs */}
-            <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-primary-50 p-1">
-              {[["login", t("Connexion")], ["register", t("Créer un compte admin")]].map(([m, label]) => (
-                <button key={m} onClick={() => { setMode(m); setError(""); }}
-                  className={`relative rounded-lg px-2 py-2 text-[13px] font-semibold cursor-pointer transition-colors ${mode === m ? "text-white" : "text-slate-500"}`}>
-                  {mode === m && (
-                    <motion.span layoutId="login-tab" className="absolute inset-0 rounded-lg grad-primary"
-                      transition={{ type: "spring", stiffness: 400, damping: 32 }} />
-                  )}
-                  <span className="relative z-10">{label}</span>
-                </button>
-              ))}
-            </div>
+            {needsSetup ? (
+              <div className="mb-6 rounded-xl bg-primary-50 px-4 py-3 text-center">
+                <p className="text-[13px] font-semibold text-primary-800">{t("Première utilisation")}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {t("Créez le compte administrateur de votre garage pour commencer.")}
+                </p>
+              </div>
+            ) : !adminExists ? (
+              /* Tabs — shown only until the administrator account exists */
+              <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-primary-50 p-1">
+                {[["login", t("Connexion")], ["register", t("Créer un compte admin")]].map(([m, label]) => (
+                  <button key={m} onClick={() => { setMode(m); setError(""); setNotice(""); }}
+                    className={`relative rounded-lg px-2 py-2 text-[13px] font-semibold cursor-pointer transition-colors ${mode === m ? "text-white" : "text-slate-500"}`}>
+                    {mode === m && (
+                      <motion.span layoutId="login-tab" className="absolute inset-0 rounded-lg grad-primary"
+                        transition={{ type: "spring", stiffness: 400, damping: 32 }} />
+                    )}
+                    <span className="relative z-10">{label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
             <form onSubmit={submit}>
               <AnimatePresence mode="wait">
@@ -149,29 +175,35 @@ export default function Login() {
 
               <AnimatePresence>
                 {error && (
-                  <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                  <motion.p key="err" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
                     exit={{ opacity: 0, height: 0 }} role="alert"
-                    className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600">
+                    className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium leading-snug text-red-600">
                     {error}
+                  </motion.p>
+                )}
+                {notice && (
+                  <motion.p key="notice" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }} role="status"
+                    className="mt-3 flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs font-medium leading-snug text-emerald-700">
+                    <CheckCircle2 size={14} className="mt-0.5 shrink-0" />
+                    {notice}
                   </motion.p>
                 )}
               </AnimatePresence>
 
-              <Btn type="submit" className="mt-5 w-full">
+              <Btn type="submit" className="mt-5 w-full" disabled={busy}
+                icon={busy ? undefined : mode === "register" ? ShieldPlus : undefined}>
+                {busy && <Loader2 size={16} className="animate-spin" />}
                 {mode === "login" ? t("Se connecter") : t("Créer un compte")}
               </Btn>
+
+              {!adminExists && mode === "login" && (
+                <button type="button" onClick={() => { setMode("register"); setError(""); setNotice(""); }}
+                  className="mt-3 w-full text-center text-xs font-semibold text-primary-600 hover:text-primary-800 cursor-pointer">
+                  {t("Créer un compte admin")}
+                </button>
+              )}
             </form>
-
-            <div className="my-4 flex items-center gap-3">
-              <div className="h-px flex-1 bg-primary-100" />
-              <span className="text-[11px] font-medium uppercase tracking-wide text-slate-400">Demo</span>
-              <div className="h-px flex-1 bg-primary-100" />
-            </div>
-
-            <Btn variant="accent" icon={Sparkles} className="w-full"
-              onClick={() => login("demo", "demo123")}>
-              {t("Compte démo (Admin)")}
-            </Btn>
           </div>
         </div>
 

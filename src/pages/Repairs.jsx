@@ -1,24 +1,36 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   CalendarPlus, Wrench, Eye, Pencil, Trash2, Wallet, CheckCircle2, Ban,
   Plus, X, Car, User, Phone, Package, Minus, Printer, FileText,
+  ScanLine, Boxes, AlertTriangle, RefreshCw,
 } from "lucide-react";
 import { useApp } from "../context";
 import {
   uid, todayISO, fmtMoney, fmtDate, paidOf, presetRange, inRange,
-  serviceNamesOf, restockRepair, consumeRepairStock,
-  printHTML, esc, repairAmounts, DEFAULT_TVA_RATE,
+  serviceNamesOf, restockRepair, consumeRepairStock, productPrice,
+  searchProducts, findProductByCode, norm,
+  printHTML, esc, docHead, docStamp, repairAmounts, DEFAULT_TVA_RATE,
 } from "../store";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
-  Badge, StatusBadge, Empty, PageHeader, Steps, Seg, CardGrid, itemRise,
-  InfoRow, MoneyLine,
+  Badge, StatusBadge, Empty, PageHeader, Steps, StepPane, Seg, CardGrid,
+  itemRise, InfoRow, MoneyLine,
 } from "../components/ui";
+import BarcodeScanner from "../components/BarcodeScanner";
+
+// Le catalogue affiché sans recherche est plafonné : au-delà, taper deux
+// lettres est plus rapide que de faire défiler tout le stock.
+const MAX_RESULTS = 40;
 
 // ========== Reusable pickers ==========
 
-export function ClientPicker({ value, onChange }) {
+/**
+ * `optional` lets the step be left empty — the job is then recorded for a
+ * walk-in customer. A balance left unpaid still needs a real client, which the
+ * summary step enforces.
+ */
+export function ClientPicker({ value, onChange, optional }) {
   const { db, update, t } = useApp();
   const [q, setQ] = useState("");
   const [creating, setCreating] = useState(false);
@@ -91,6 +103,11 @@ export function ClientPicker({ value, onChange }) {
               </div>
             </motion.div>
           )}
+          {optional && (
+            <p className="rounded-xl bg-slate-50 px-4 py-2.5 text-xs leading-snug text-slate-500">
+              {t("Laissez vide pour enregistrer en client de passage. Un reste à payer exigera un client.")}
+            </p>
+          )}
         </>
       )}
     </div>
@@ -100,6 +117,7 @@ export function ClientPicker({ value, onChange }) {
 export function ServicePicker({ selected, onChange }) {
   const { db, update, t } = useApp();
   const [creating, setCreating] = useState(false);
+  const [q, setQ] = useState("");
   const [form, setForm] = useState({ name: "", description: "", price: "" });
 
   const toggle = (id) =>
@@ -111,12 +129,35 @@ export function ServicePicker({ selected, onChange }) {
     update((d) => d.services.push(s));
     onChange([...selected, s.id]);
     setCreating(false); setForm({ name: "", description: "", price: "" });
+    setQ("");
   };
+
+  // Les prestations retenues restent visibles en tête, même quand la recherche
+  // ne les fait plus ressortir : on doit toujours pouvoir en retirer une.
+  const shown = useMemo(() => {
+    const list = q ? db.services.filter((sv) => norm(sv.name).includes(norm(q))) : db.services;
+    const extra = db.services.filter((sv) => selected.includes(sv.id) && !list.includes(sv));
+    return [...extra, ...list];
+  }, [db.services, q, selected]);
+
+  const chosenTotal = selected.reduce(
+    (sum, id) => sum + Number(db.services.find((x) => x.id === id)?.price || 0), 0
+  );
 
   return (
     <div className="space-y-3">
+      {db.services.length > 6 && (
+        <SearchBox value={q} onChange={setQ} placeholder={t("Rechercher une prestation...")} />
+      )}
+
+      {db.services.length === 0 && (
+        <p className="rounded-xl bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
+          {t("Aucune prestation enregistrée. Créez-en une ci-dessous.")}
+        </p>
+      )}
+
       <div className="flex flex-wrap gap-2">
-        {db.services.map((s) => {
+        {shown.map((s) => {
           const on = selected.includes(s.id);
           return (
             <motion.button key={s.id} whileTap={{ scale: 0.95 }} onClick={() => toggle(s.id)}
@@ -128,6 +169,12 @@ export function ServicePicker({ selected, onChange }) {
           );
         })}
       </div>
+
+      {selected.length > 0 && (
+        <div className="rounded-xl bg-primary-50/70 px-3.5 py-2.5">
+          <MoneyLine label={`${selected.length} ${t("prestation(s)")}`} value={fmtMoney(chosenTotal)} />
+        </div>
+      )}
       {!creating ? (
         <Btn variant="soft" icon={Plus} onClick={() => setCreating(true)}>{t("Nouveau service")}</Btn>
       ) : (
@@ -154,68 +201,200 @@ export function ServicePicker({ selected, onChange }) {
   );
 }
 
+/**
+ * Pièces posées sur une réparation.
+ *
+ * L'écran affiche le stock en permanence — auparavant la liste n'apparaissait
+ * qu'après avoir tapé, et restait muette dès qu'un accent, une majuscule ou un
+ * espace ne tombait pas juste. La recherche accepte désormais le nom, la
+ * marque, la description et le code-barres, et la caméra du téléphone remplace
+ * la saisie quand la pièce porte une étiquette.
+ */
 export function ProductPicker({ items, onChange }) {
   const { db, t } = useApp();
   const [q, setQ] = useState("");
-  const results = q
-    ? db.products.filter(
-        (p) => p.name.toLowerCase().includes(q.toLowerCase()) || (p.barcode || "").includes(q)
-      ).slice(0, 6)
-    : [];
+  const [scanning, setScanning] = useState(false);
+  const [notice, setNotice] = useState(null); // { ok, text }
 
-  const add = (p) => {
-    if (!items.some((i) => i.productId === p.id)) onChange([...items, { productId: p.id, qty: 1 }]);
+  const chosen = useMemo(
+    () => new Map(items.map((i) => [i.productId, Number(i.qty) || 0])),
+    [items]
+  );
+
+  const results = useMemo(() => searchProducts(db.products, q, MAX_RESULTS), [db.products, q]);
+  const truncated = !q && db.products.length > MAX_RESULTS;
+
+  // Le retour d'un scan s'efface tout seul : il confirme un geste, il ne
+  // demande pas d'être fermé à la main.
+  useEffect(() => {
+    if (!notice) return;
+    const id = setTimeout(() => setNotice(null), 2800);
+    return () => clearTimeout(id);
+  }, [notice]);
+
+  /** Ajoute la pièce, ou incrémente sa quantité si elle est déjà sur la fiche. */
+  const add = (p, step = 1) => {
+    const current = chosen.get(p.id);
+    if (current === undefined) onChange([...items, { productId: p.id, qty: step }]);
+    else onChange(items.map((i) => (i.productId === p.id ? { ...i, qty: current + step } : i)));
     setQ("");
+    return current === undefined ? step : current + step;
   };
+
   const setQty = (id, qty) =>
     onChange(items.map((i) => (i.productId === id ? { ...i, qty: Math.max(1, qty) } : i)));
 
+  const remove = (id) => onChange(items.filter((i) => i.productId !== id));
+
+  // Retour affiché par le scanner après chaque lecture.
+  const onScan = (code) => {
+    const p = findProductByCode(db, code);
+    if (!p) {
+      setNotice({ ok: false, text: `${code} — ${t("Aucun produit avec ce code-barres")}` });
+      return { ok: false, message: t("Aucun produit avec ce code-barres") };
+    }
+    const qty = add(p);
+    setNotice({ ok: true, text: `${p.name} × ${qty}` });
+    return { ok: true, message: `${p.name} × ${qty}` };
+  };
+
+  const subtotal = items.reduce((s, it) => {
+    const p = db.products.find((x) => x.id === it.productId);
+    return s + productPrice(p) * (Number(it.qty) || 0);
+  }, 0);
+
   return (
     <div className="space-y-3">
-      <SearchBox value={q} onChange={setQ} placeholder={t("Rechercher un produit...")} />
+      {/* ---- recherche + caméra ---- */}
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <div className="flex-1">
+          <SearchBox value={q} onChange={setQ}
+            placeholder={t("Rechercher une pièce : nom, marque ou code-barres...")} />
+        </div>
+        <Btn variant="soft" icon={ScanLine} onClick={() => setScanning(true)} className="sm:w-auto">
+          {t("Scanner")}
+        </Btn>
+      </div>
+
       <AnimatePresence>
-        {results.length > 0 && (
-          <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-            className="overflow-hidden rounded-xl border border-primary-100">
-            {results.map((p) => (
-              <button key={p.id} onClick={() => add(p)}
-                className="flex w-full items-center justify-between px-4 py-2.5 text-start transition-colors hover:bg-primary-50 cursor-pointer border-b border-primary-50 last:border-0">
-                <span className="text-sm font-medium text-primary-900">{p.name}</span>
-                <span className="text-xs text-slate-400">
-                  {p.qtyCurrent} {t("en stock")} · <span className="font-mono text-primary-600">{fmtMoney(p.salePrice || p.purchasePrice)}</span>
-                </span>
-              </button>
-            ))}
-          </motion.div>
+        {notice && (
+          <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className={`overflow-hidden rounded-lg px-3 py-2 text-xs font-medium ${
+              notice.ok ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
+            }`}>
+            {notice.text}
+          </motion.p>
         )}
       </AnimatePresence>
+
+      {/* ---- catalogue ---- */}
+      <div className="overflow-hidden rounded-xl border border-primary-100">
+        <div className="flex items-center justify-between border-b border-primary-50 bg-primary-50/60 px-3.5 py-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide text-primary-500">
+            <Boxes size={12} /> {t("Produits du stock")}
+          </span>
+          <span className="text-[11px] text-slate-400">
+            {results.length}{truncated ? "+" : ""} {t("résultats")}
+          </span>
+        </div>
+
+        {results.length === 0 ? (
+          <p className="px-3.5 py-6 text-center text-xs text-slate-400">
+            {db.products.length === 0
+              ? t("Aucun produit en stock. Ajoutez-en depuis « Gestion de stock ».")
+              : t("Aucun produit ne correspond à cette recherche.")}
+          </p>
+        ) : (
+          <div className="max-h-56 overflow-y-auto">
+            {results.map((p) => {
+              const stock = Number(p.qtyCurrent) || 0;
+              const picked = chosen.get(p.id);
+              return (
+                <button key={p.id} type="button" onClick={() => add(p)}
+                  className="flex w-full items-center justify-between gap-3 border-b border-primary-50 px-3.5 py-2.5 text-start transition-colors last:border-0 hover:bg-primary-50 cursor-pointer">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-semibold text-primary-900">
+                      {p.name}
+                      {picked !== undefined && (
+                        <span className="ms-2 rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-bold text-primary-700">
+                          × {picked}
+                        </span>
+                      )}
+                    </p>
+                    <p className="truncate text-[11px] text-slate-400">
+                      {[p.brand, p.barcode].filter(Boolean).join(" · ") || t("Sans code-barres")}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-end">
+                    <p className="font-mono text-[13px] font-bold text-primary-700">{fmtMoney(productPrice(p))}</p>
+                    <p className={`text-[11px] ${stock > 0 ? "text-slate-400" : "text-red-500"}`}>
+                      {stock} {t("en stock")}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ---- pièces retenues ---- */}
       {items.length > 0 && (
         <div className="space-y-2">
           {items.map((it) => {
             const p = db.products.find((x) => x.id === it.productId);
             if (!p) return null;
+            const stock = Number(p.qtyCurrent) || 0;
+            const qty = Number(it.qty) || 0;
+            const short = qty > stock;
             return (
               <motion.div key={it.productId} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                className="flex items-center justify-between gap-3 rounded-xl border border-primary-100 bg-white px-3.5 py-2.5">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <Package size={15} className="shrink-0 text-primary-400" />
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-semibold text-primary-900">{p.name}</p>
-                    <p className="text-[11px] text-slate-400">{fmtMoney(p.salePrice || p.purchasePrice)} · {p.qtyCurrent} {t("en stock")}</p>
+                className={`rounded-xl border bg-white px-3.5 py-2.5 ${short ? "border-accent-300 bg-accent-50/40" : "border-primary-100"}`}>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <Package size={15} className="shrink-0 text-primary-400" />
+                    <div className="min-w-0">
+                      <p className="truncate text-[13px] font-semibold text-primary-900">{p.name}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {fmtMoney(productPrice(p))} · {stock} {t("en stock")}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <IconBtn icon={Minus} title="-" onClick={() => setQty(it.productId, qty - 1)} />
+                    <input type="number" min="1" value={qty}
+                      onChange={(e) => setQty(it.productId, Number(e.target.value))}
+                      className="input h-9 w-14 px-1 py-1 text-center font-mono text-sm" />
+                    <IconBtn icon={Plus} title="+" onClick={() => setQty(it.productId, qty + 1)} />
+                    <span className="w-24 text-end font-mono text-[13px] font-extrabold text-primary-900">
+                      {fmtMoney(productPrice(p) * qty)}
+                    </span>
+                    <IconBtn icon={X} title={t("Supprimer")} variant="danger" onClick={() => remove(it.productId)} />
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <IconBtn icon={Minus} title="-" onClick={() => setQty(it.productId, Number(it.qty) - 1)} />
-                  <span className="w-8 text-center font-mono text-sm font-bold">{it.qty}</span>
-                  <IconBtn icon={Plus} title="+" onClick={() => setQty(it.productId, Number(it.qty) + 1)} />
-                  <IconBtn icon={X} title={t("Supprimer")} variant="danger"
-                    onClick={() => onChange(items.filter((i) => i.productId !== it.productId))} />
-                </div>
+                {short && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium text-accent-700">
+                    <AlertTriangle size={12} />
+                    {t("Quantité supérieure au stock disponible")} ({stock})
+                  </p>
+                )}
               </motion.div>
             );
           })}
+          <div className="rounded-xl bg-primary-50/70 px-3.5 py-2.5">
+            <MoneyLine label={t("Sous-total pièces")} value={fmtMoney(subtotal)} />
+          </div>
         </div>
       )}
+
+      <BarcodeScanner
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onScan={onScan}
+        title={t("Scanner une pièce")}
+        subtitle={t("Chaque code-barres reconnu est ajouté aux produits utilisés sur cette réparation.")}
+      />
     </div>
   );
 }
@@ -272,15 +451,44 @@ function TvaSection({ on, setOn, rate, setRate, base, tva, total }) {
 }
 
 // ========== helpers ==========
+
+/** Somme catalogue des prestations et des pièces retenues. */
+export const autoTotalOf = (db, serviceIds = [], products = []) => {
+  const s = serviceIds.reduce(
+    (sum, id) => sum + Number(db.services.find((x) => x.id === id)?.price || 0), 0
+  );
+  const p = products.reduce((sum, it) => {
+    const pr = db.products.find((x) => x.id === it.productId);
+    return sum + productPrice(pr) * (Number(it.qty) || 0);
+  }, 0);
+  return s + p;
+};
+
 const useAutoTotal = (db, serviceIds, products) =>
-  useMemo(() => {
-    const s = serviceIds.reduce((sum, id) => sum + Number(db.services.find((x) => x.id === id)?.price || 0), 0);
-    const p = products.reduce((sum, it) => {
-      const pr = db.products.find((x) => x.id === it.productId);
-      return sum + Number(pr?.salePrice || pr?.purchasePrice || 0) * Number(it.qty);
-    }, 0);
-    return s + p;
-  }, [db, serviceIds, products]);
+  useMemo(() => autoTotalOf(db, serviceIds, products), [db, serviceIds, products]);
+
+/**
+ * Champ « Total HT » avec retour au total calculé.
+ *
+ * Le montant reste modifiable à la main — un geste commercial, une remise —
+ * mais dès qu'il s'écarte du catalogue on propose de revenir au calcul, sinon
+ * ajouter une pièce après avoir corrigé le prix passait inaperçu.
+ */
+function TotalField({ value, auto, edited, onChange, onReset }) {
+  const { t } = useApp();
+  return (
+    <Field label={t("Total HT (modifiable)")}>
+      <Input type="number" min="0" value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      {edited && Math.round(auto) !== Math.round(value) && (
+        <button type="button" onClick={onReset}
+          className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 hover:text-primary-800 cursor-pointer">
+          <RefreshCw size={12} />
+          {t("Revenir au total calculé")} — {fmtMoney(auto)}
+        </button>
+      )}
+    </Field>
+  );
+}
 
 // ========== Wizard (create / edit appointment & repair) ==========
 
@@ -322,11 +530,10 @@ function RepairWizard({ mode, editing, onClose }) {
     : [t("Client"), t("Véhicule"), t("Services"), t("Résumé")];
   const last = steps.length - 1;
 
+  const svcStep = isAppt ? 3 : 2;
+
   const validate = (s) => {
     setErr("");
-    const clientStep = isAppt ? 1 : 0;
-    const svcStep = isAppt ? 3 : 2;
-    if (s === clientStep && !clientId) { setErr(t("Veuillez sélectionner un client")); return false; }
     if (s === svcStep && serviceIds.length === 0 && products.length === 0) {
       setErr(t("Sélectionnez au moins un service ou produit")); return false;
     }
@@ -334,6 +541,12 @@ function RepairWizard({ mode, editing, onClose }) {
   };
 
   const save = () => {
+    if (!validate(svcStep)) { setStep(svcStep); return; }
+    // A balance carried over has to be attached to someone we can invoice later
+    if (rest > 0 && !clientId) {
+      setErr(t("Un reste à payer doit être rattaché à un client. Sélectionnez ou créez un client."));
+      return;
+    }
     const rec = {
       id: editing?.id || uid(),
       type: isAppt ? "appointment" : "repair",
@@ -386,7 +599,7 @@ function RepairWizard({ mode, editing, onClose }) {
           </Field>
         </div>
       );
-    if (idx === 1) return <ClientPicker value={clientId} onChange={setClientId} />;
+    if (idx === 1) return <ClientPicker value={clientId} onChange={setClientId} optional />;
     if (idx === 2)
       return (
         <div className="space-y-4">
@@ -421,8 +634,8 @@ function RepairWizard({ mode, editing, onClose }) {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="rounded-xl border border-primary-100 bg-surface p-4">
             <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-primary-400"><User size={13} /> {t("Client")}</p>
-            <p className="text-sm font-semibold text-primary-900">{client?.name}</p>
-            <p className="text-xs text-slate-500">{client?.phone}</p>
+            <p className="text-sm font-semibold text-primary-900">{client?.name || t("Client de passage")}</p>
+            <p className="text-xs text-slate-500">{client?.phone || "—"}</p>
           </div>
           <div className="rounded-xl border border-primary-100 bg-surface p-4">
             <p className="mb-2 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-primary-400"><Car size={13} /> {t("Véhicule")}</p>
@@ -455,16 +668,23 @@ function RepairWizard({ mode, editing, onClose }) {
           </Field>
         )}
         <div className="space-y-3 rounded-xl border-2 border-primary-200 bg-primary-50/50 p-4">
-          <Field label={t("Total HT (modifiable)")}>
-            <Input type="number" min="0" value={baseHT}
-              onChange={(e) => { setTotalEdited(true); setTotal(Number(e.target.value)); }} />
-          </Field>
+          <TotalField value={baseHT} auto={autoTotal} edited={totalEdited}
+            onChange={(v) => { setTotalEdited(true); setTotal(v); }}
+            onReset={() => { setTotalEdited(false); setTotal(autoTotal); }} />
           <TvaSection on={tvaOn} setOn={setTvaOn} rate={tvaRate} setRate={setTvaRate}
             base={baseHT} tva={tvaAmount} total={grandTotal} />
           <Field label={t("Le client paie")}>
             <Input type="number" min="0" value={shownPaid} onChange={(e) => setPaid(Number(e.target.value))} />
           </Field>
           <MoneyLine label={t("Reste")} value={fmtMoney(rest)} color={rest > 0 ? "text-red-500" : "text-emerald-600"} big />
+          {rest > 0 && !clientId && (
+            <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-3.5">
+              <p className="text-xs font-semibold leading-snug text-red-600">
+                {t("Un reste à payer doit être rattaché à un client. Sélectionnez ou créez un client.")}
+              </p>
+              <ClientPicker value={clientId} onChange={setClientId} />
+            </div>
+          )}
         </div>
       </div>
     );
@@ -475,6 +695,13 @@ function RepairWizard({ mode, editing, onClose }) {
       title={editing ? t("Modifier") : isAppt ? t("Nouveau RDV") : t("Nouvelle réparation")}
       footer={
         <>
+          {/* Le montant en cours reste sous les yeux à chaque étape. */}
+          <div className="me-auto text-start">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              {t(tvaOn ? "Total TTC" : "Total")}
+            </p>
+            <p className="font-mono text-base font-bold text-primary-900">{fmtMoney(grandTotal)}</p>
+          </div>
           {step > 0 && <Btn variant="ghost" onClick={() => setStep(step - 1)}>{t("Précédent")}</Btn>}
           {step < last
             ? <Btn onClick={() => validate(step) && setStep(step + 1)}>{t("Suivant")}</Btn>
@@ -482,12 +709,7 @@ function RepairWizard({ mode, editing, onClose }) {
         </>
       }>
       <Steps labels={steps} current={step} />
-      <AnimatePresence mode="wait">
-        <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.2 }}>
-          {stepContent()}
-        </motion.div>
-      </AnimatePresence>
+      <StepPane step={step}>{stepContent()}</StepPane>
       {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600" role="alert">{err}</p>}
     </Modal>
   );
@@ -541,69 +763,166 @@ function PayModal({ repair, onClose }) {
 
 // ========== Finalize modal ==========
 
+/**
+ * Clôture d'un rendez-vous.
+ *
+ * L'atelier corrige ici ce qui a réellement été fait : la fiche est ouverte
+ * telle qu'elle a été réservée — prestations et pièces comprises — et non plus
+ * en lecture seule avec un simple ajout par-dessus. Retirer une pièce prévue
+ * mais non posée la remet donc bien en stock.
+ */
 function FinalizeModal({ repair, onClose }) {
   const { db, update, t, currentUser } = useApp();
+  const [clientId, setClientId] = useState(repair.clientId || "");
+  const [err, setErr] = useState("");
   const [serviceIds, setServiceIds] = useState(repair.services.map((s) => s.serviceId).filter(Boolean));
-  const [newProducts, setNewProducts] = useState([]); // products added at finalization
+  const [products, setProducts] = useState(() => (repair.products || []).map((p) => ({ ...p })));
   const [workers, setWorkers] = useState(
     repair.workers?.length ? repair.workers : currentUser?.kind === "worker" ? [currentUser.id] : []
   );
   const already = paidOf(repair.payments);
-  const autoNew = useAutoTotal(db, serviceIds, [...repair.products, ...newProducts]);
-  const [totalEdited, setTotalEdited] = useState(false);
-  const [total, setTotal] = useState(repair.subtotal ?? repair.total); // HT base
+
+  const autoTotal = useAutoTotal(db, serviceIds, products);
+
+  // Un total saisi à la main lors de la prise de rendez-vous doit survivre à
+  // l'ouverture de cette fenêtre : on ne le repasse en automatique que s'il
+  // correspondait déjà au calcul du catalogue.
+  const [totalEdited, setTotalEdited] = useState(() => {
+    const stored = Number(repair.subtotal ?? repair.total) || 0;
+    const asBooked = autoTotalOf(
+      db,
+      repair.services.map((x) => x.serviceId).filter(Boolean),
+      repair.products || []
+    );
+    return Math.round(stored) !== Math.round(asBooked);
+  });
+  const [total, setTotal] = useState(Number(repair.subtotal ?? repair.total) || 0);
+
   const [tvaOn, setTvaOn] = useState(!!repair.tva?.enabled);
   const [tvaRate, setTvaRate] = useState(repair.tva?.rate ?? DEFAULT_TVA_RATE);
-  const baseHT = Number(totalEdited ? total : Math.max(autoNew, Number(repair.subtotal ?? repair.total) || 0)) || 0;
+
+  const baseHT = Number(totalEdited ? total : autoTotal) || 0;
   const tvaAmount = tvaOn ? Math.round((baseHT * (Number(tvaRate) || 0)) / 100) : 0;
   const grandTotal = baseHT + tvaAmount;
   const rest = Math.max(0, grandTotal - already);
-  const [amount, setAmount] = useState(rest);
-  const newRest = Math.max(0, grandTotal - already - Number(amount || 0));
+
+  // Le montant proposé suit le reste dû tant que le caissier n'a rien saisi.
+  const [amount, setAmount] = useState(null);
+  const shownAmount = amount === null ? rest : Number(amount) || 0;
+  const newRest = Math.max(0, grandTotal - already - shownAmount);
 
   const save = () => {
+    setErr("");
+    if (serviceIds.length === 0 && products.length === 0) {
+      setErr(t("Sélectionnez au moins un service ou produit"));
+      return;
+    }
+    if (newRest > 0 && !clientId) {
+      setErr(t("Un reste à payer doit être rattaché à un client. Sélectionnez ou créez un client."));
+      return;
+    }
     update((d) => {
       const r = d.repairs.find((x) => x.id === repair.id);
       if (!r) return;
-      consumeRepairStock(d, newProducts);
+      // Les pièces réservées à la prise de rendez-vous sont rendues, puis la
+      // liste réellement posée est déduite : la correction fonctionne dans les
+      // deux sens, en plus comme en moins.
+      restockRepair(d, r);
+      consumeRepairStock(d, products);
+      r.clientId = clientId;
       r.services = serviceIds.map((id) => ({ serviceId: id }));
-      r.products = [...r.products, ...newProducts];
+      r.products = products;
       r.subtotal = baseHT;
       r.tva = { enabled: tvaOn, rate: Number(tvaRate) || 0, amount: tvaAmount };
       r.total = grandTotal;
-      if (Number(amount) > 0) r.payments.push({ id: uid(), amount: Number(amount), date: todayISO() });
+      if (shownAmount > 0) r.payments.push({ id: uid(), amount: shownAmount, date: todayISO() });
       r.workers = workers;
       r.status = "finalized";
     });
     onClose();
   };
 
+  const client = db.clients.find((c) => c.id === clientId);
+
   return (
     <Modal open onClose={onClose} title={t("Finalisation")} width="max-w-3xl"
-      footer={<><Btn variant="ghost" onClick={onClose}>{t("Annuler")}</Btn><Btn variant="accent" icon={CheckCircle2} onClick={save}>{t("Finaliser")}</Btn></>}>
+      footer={
+        <>
+          <div className="me-auto text-start">
+            <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">
+              {t(tvaOn ? "Total TTC" : "Total")}
+            </p>
+            <p className="font-mono text-base font-bold text-primary-900">{fmtMoney(grandTotal)}</p>
+          </div>
+          <Btn variant="ghost" onClick={onClose}>{t("Annuler")}</Btn>
+          <Btn variant="accent" icon={CheckCircle2} onClick={save}>{t("Finaliser")}</Btn>
+        </>
+      }>
       <div className="space-y-5">
+        {/* Rappel de la fiche : on finalise un rendez-vous précis, pas un formulaire vierge */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="rounded-xl border border-primary-100 bg-surface p-3.5">
+            <p className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-primary-400">
+              <User size={12} /> {t("Client")}
+            </p>
+            <p className="text-sm font-semibold text-primary-900">{client?.name || t("Client de passage")}</p>
+            <p className="text-xs text-slate-500">{client?.phone || "—"}</p>
+          </div>
+          <div className="rounded-xl border border-primary-100 bg-surface p-3.5">
+            <p className="mb-1 flex items-center gap-2 text-[11px] font-bold uppercase tracking-wide text-primary-400">
+              <Car size={12} /> {t("Véhicule")}
+            </p>
+            <p className="text-sm font-semibold text-primary-900">
+              {[repair.car?.brand, repair.car?.name, repair.car?.year].filter(Boolean).join(" ") || "—"}
+            </p>
+            <p className="text-xs text-slate-500">
+              {[repair.car?.color, repair.car?.plate].filter(Boolean).join(" · ") || "—"}
+            </p>
+          </div>
+        </div>
+
+        {repair.problem && (
+          <div className="rounded-xl border border-primary-100 bg-surface p-3.5">
+            <p className="mb-1 text-[11px] font-bold uppercase tracking-wide text-primary-400">{t("Problème")}</p>
+            <p className="text-sm text-slate-600">{repair.problem}</p>
+          </div>
+        )}
+
         <Field label={t("Services")}>
           <ServicePicker selected={serviceIds} onChange={setServiceIds} />
         </Field>
-        <Field label={t("Produits du stock")}>
-          <ProductPicker items={newProducts} onChange={setNewProducts} />
+
+        <Field label={t("Produits du stock")}
+          hint={t("Ajoutez, retirez ou corrigez les pièces réellement posées — le stock suit.")}>
+          <ProductPicker items={products} onChange={setProducts} />
         </Field>
+
         <Field label={t("Assigner des employés (optionnel)")}>
           <WorkerPicker selected={workers} onChange={setWorkers} />
         </Field>
+
         <div className="space-y-3 rounded-xl border-2 border-primary-200 bg-primary-50/50 p-4">
-          <Field label={t("Total HT (modifiable)")}>
-            <Input type="number" min="0" value={baseHT}
-              onChange={(e) => { setTotalEdited(true); setTotal(Number(e.target.value)); }} />
-          </Field>
+          <TotalField value={baseHT} auto={autoTotal} edited={totalEdited}
+            onChange={(v) => { setTotalEdited(true); setTotal(v); }}
+            onReset={() => { setTotalEdited(false); setTotal(autoTotal); }} />
           <TvaSection on={tvaOn} setOn={setTvaOn} rate={tvaRate} setRate={setTvaRate}
             base={baseHT} tva={tvaAmount} total={grandTotal} />
           <Field label={t("Payer maintenant")}>
-            <Input type="number" min="0" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            <Input type="number" min="0" value={shownAmount}
+              onChange={(e) => setAmount(e.target.value === "" ? 0 : Number(e.target.value))} />
           </Field>
           <MoneyLine label={t("Déjà payé")} value={fmtMoney(already)} color="text-emerald-600" />
           <MoneyLine label={t("Reste")} value={fmtMoney(newRest)} color={newRest > 0 ? "text-red-500" : "text-emerald-600"} big />
+          {newRest > 0 && !clientId && (
+            <div className="space-y-3 rounded-xl border border-red-200 bg-red-50 p-3.5">
+              <p className="text-xs font-semibold leading-snug text-red-600">
+                {t("Un reste à payer doit être rattaché à un client. Sélectionnez ou créez un client.")}
+              </p>
+              <ClientPicker value={clientId} onChange={setClientId} />
+            </div>
+          )}
         </div>
+        {err && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600" role="alert">{err}</p>}
       </div>
     </Modal>
   );
@@ -633,7 +952,7 @@ function ViewModal({ repair, onClose }) {
         </Badge>
         <StatusBadge status={repair.status} />
       </div>
-      <InfoRow label={t("Client")} value={client ? `${client.name} · ${client.phone}` : "—"} />
+      <InfoRow label={t("Client")} value={client ? `${client.name} · ${client.phone}` : t("Client de passage")} />
       <InfoRow label={t("Arrivée")} value={`${fmtDate(repair.dateIn, lang)} ${repair.dateIn?.slice(11, 16) || ""}`} />
       <InfoRow label={t("Sortie")} value={`${fmtDate(repair.dateOut, lang)} ${repair.dateOut?.slice(11, 16) || ""}`} />
       <InfoRow label={t("Véhicule")} value={[repair.car?.brand, repair.car?.name, repair.car?.year].filter(Boolean).join(" ") || "—"} />
@@ -720,33 +1039,8 @@ export function printRepairDoc(repair, db, t, lang, kind = "invoice") {
     .map((p) => `<tr><td>${fmtDate(p.date, lang)}</td><td class="num">${fmtMoney(p.amount)}</td></tr>`)
     .join("");
 
-  const orgLine = (label, value) => (value ? `<b>${esc(label)}:</b> ${esc(value)}` : "");
-  const fiscal = [orgLine("NIF", s.nif), orgLine("NIS", s.nis)].filter(Boolean).join(" · ");
-  const legal = [orgLine("RC", s.rc), orgLine(t("Article"), s.article)].filter(Boolean).join(" · ");
-
   printHTML(`${docTitle} ${ref}`, `
-    <div class="doc-head">
-      <div class="doc-brand">
-        ${s.logo
-          ? `<img src="${esc(s.logo)}" alt="logo"/>`
-          : `<div class="logo-ph">${esc((s.name || "G").trim().slice(0, 1).toUpperCase())}</div>`}
-        <div>
-          <div class="nm">${esc(s.name || "—")}</div>
-          ${s.description ? `<div class="tag">${esc(s.description)}</div>` : ""}
-        </div>
-      </div>
-      <div class="doc-title">
-        <h1>${esc(docTitle)}</h1>
-        <div class="rule"></div>
-      </div>
-      <div class="doc-org">
-        ${s.address ? `${esc(s.address)}<br/>` : ""}
-        ${s.phone ? `${orgLine(t("Tél"), s.phone)}<br/>` : ""}
-        ${s.email ? `${esc(s.email)}<br/>` : ""}
-        ${fiscal ? `${fiscal}<br/>` : ""}
-        ${legal}
-      </div>
-    </div>
+    ${docHead(s, docTitle, ref, t)}
 
     <div class="doc-meta">
       <div><span>${t("Référence")}:</span> <b>${ref}</b></div>
@@ -758,7 +1052,7 @@ export function printRepairDoc(repair, db, t, lang, kind = "invoice") {
     <div class="grid2">
       <div class="box">
         <h3>${t("Client")}</h3>
-        <div class="kv"><span>${t("Nom")}</span><b>${esc(client?.name || "—")}</b></div>
+        <div class="kv"><span>${t("Nom")}</span><b>${esc(client?.name || t("Client de passage"))}</b></div>
         <div class="kv"><span>${t("Téléphone")}</span><b>${esc(client?.phone || "—")}</b></div>
         <div class="kv"><span>${t("Client depuis")}</span><b>${client?.createdAt ? fmtDate(client.createdAt, lang) : "—"}</b></div>
       </div>
@@ -785,28 +1079,35 @@ export function printRepairDoc(repair, db, t, lang, kind = "invoice") {
     </div>
 
     <h2>${t("Services & produits")}</h2>
-    <table>
-      <tr>
-        <th>${t("Désignation")}</th><th>${t("Type")}</th>
-        <th class="num">${t("Qté")}</th><th class="num">${t("Prix unitaire")}</th><th class="num">${t("Total")}</th>
-      </tr>
-      ${rows || `<tr><td colspan="5" class="dim">${t("Aucun service")}</td></tr>`}
+    <table class="doc-table">
+      <thead>
+        <tr>
+          <th>${t("Désignation")}</th><th>${t("Type")}</th>
+          <th class="num">${t("Qté")}</th><th class="num">${t("Prix unitaire")}</th><th class="num">${t("Total")}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows || `<tr><td colspan="5" class="dim">${t("Aucun service")}</td></tr>`}
+      </tbody>
     </table>
 
-    <div class="totals">
-      ${tvaEnabled ? `
-        <div class="row"><span>${t("Total HT")}</span><b>${fmtMoney(subtotal)}</b></div>
-        <div class="row"><span>${t("TVA")} (${tvaRate}%)</span><b>${fmtMoney(tva)}</b></div>` : ""}
-      <div class="row grand"><span>${t(tvaEnabled ? "Total TTC" : "Total à payer")}</span><b>${fmtMoney(total)}</b></div>
-      <div class="row"><span>${t("Payé")}</span><b>${fmtMoney(paid)}</b></div>
-      <div class="row due"><span>${t("Reste")}</span><b>${fmtMoney(rest)}</b></div>
+    <div class="totals-wrap">
+      <div>${docStamp(total, paid, t)}</div>
+      <div class="totals">
+        ${tvaEnabled ? `
+          <div class="row"><span>${t("Total HT")}</span><b>${fmtMoney(subtotal)}</b></div>
+          <div class="row"><span>${t("TVA")} (${tvaRate}%)</span><b>${fmtMoney(tva)}</b></div>` : ""}
+        <div class="row grand"><span>${t(tvaEnabled ? "Total TTC" : "Total à payer")}</span><b>${fmtMoney(total)}</b></div>
+        <div class="row"><span>${t("Payé")}</span><b>${fmtMoney(paid)}</b></div>
+        <div class="row due"><span>${t("Reste")}</span><b>${fmtMoney(rest)}</b></div>
+      </div>
     </div>
 
     ${payRows ? `
       <h2>${t("Historique des paiements")}</h2>
-      <table>
-        <tr><th>${t("Date")}</th><th class="num">${t("Montant")}</th></tr>
-        ${payRows}
+      <table class="doc-table">
+        <thead><tr><th>${t("Date")}</th><th class="num">${t("Montant")}</th></tr></thead>
+        <tbody>${payRows}</tbody>
       </table>` : ""}
 
     <div class="sig">
@@ -931,10 +1232,10 @@ export default function Repairs() {
                 </div>
                 <div className="mb-1 flex items-center gap-2">
                   <User size={14} className="text-primary-400" />
-                  <p className="text-sm font-bold text-primary-900">{client?.name || "—"}</p>
+                  <p className="text-sm font-bold text-primary-900">{client?.name || t("Client de passage")}</p>
                 </div>
                 <div className="mb-2 flex items-center gap-2 text-xs text-slate-400">
-                  <Phone size={12} /> {client?.phone}
+                  <Phone size={12} /> {client?.phone || "—"}
                   <span className="mx-1">·</span>
                   <Car size={12} /> {[r.car?.brand, r.car?.name].filter(Boolean).join(" ") || "—"}
                 </div>

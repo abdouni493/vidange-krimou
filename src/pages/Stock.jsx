@@ -1,24 +1,41 @@
 import { useMemo, useState } from "react";
-import { motion } from "framer-motion";
-import { Plus, Pencil, Trash2, Eye, Package, AlertTriangle } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus, Pencil, Trash2, Eye, Package, AlertTriangle, Shuffle, Printer, Check,
+  CalendarClock,
+} from "lucide-react";
 import { useApp } from "../context";
 import { uid, todayISO, fmtMoney, fmtDate } from "../store";
+import { randomEan13, normalizeEan13, isValidEan13, printLabels } from "../barcode";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
-  Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow,
+  Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
 } from "../components/ui";
 
-// Shared product form — also embedded in the Purchases interface
+/**
+ * Shared product form — also embedded in the Purchases interface.
+ *
+ * The sheet only describes *what* the product is and how many are on the shelf.
+ * Everything commercial (buy price, sell price, alert threshold, expiry date)
+ * belongs to a purchase, because that is where those values actually change.
+ */
 export function ProductForm({ editing, onClose, onCreated }) {
-  const { db, update, t } = useApp();
-  const [form, setForm] = useState(
-    editing || {
-      name: "", description: "", brand: "", categoryId: "", barcode: "",
-      purchasePrice: "", salePrice: "", qtyCurrent: 0, minQty: 5, expiration: "",
-    }
-  );
+  const { db, update, t, lang } = useApp();
+  const [form, setForm] = useState(() => ({
+    name: editing?.name || "",
+    description: editing?.description || "",
+    brand: editing?.brand || "",
+    categoryId: editing?.categoryId || "",
+    barcode: editing?.barcode || "",
+    qtyCurrent: editing?.qtyCurrent ?? 0,
+    trackExpiration: !!editing?.trackExpiration,
+  }));
   const [newCat, setNewCat] = useState(null); // null | string being typed
+  const [copies, setCopies] = useState(1);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const hasCode = !!String(form.barcode || "").trim();
+  const codeValid = isValidEan13(form.barcode);
 
   const addCategory = () => {
     if (!newCat?.trim()) return;
@@ -28,26 +45,47 @@ export function ProductForm({ editing, onClose, onCreated }) {
     setNewCat(null);
   };
 
+  const printLabel = () =>
+    printLabels(
+      [{
+        name: form.name.trim() || t("Nom du produit"),
+        code: normalizeEan13(form.barcode || randomEan13()),
+        price: editing?.salePrice || editing?.purchasePrice || 0,
+        copies,
+      }],
+      {
+        store: db.settings.name || "",
+        title: t("Étiquettes code-barres"),
+        dir: lang === "ar" ? "rtl" : "ltr",
+      }
+    );
+
   const save = () => {
     if (!form.name.trim()) return;
+    const qty = Math.max(0, Number(form.qtyCurrent) || 0);
+    const barcode = hasCode ? normalizeEan13(form.barcode) : "";
+    const shared = {
+      name: form.name.trim(), description: form.description, brand: form.brand,
+      categoryId: form.categoryId, barcode, trackExpiration: !!form.trackExpiration,
+    };
     if (editing) {
       update((d) => {
         const i = d.products.findIndex((p) => p.id === editing.id);
+        if (i < 0) return;
         d.products[i] = {
-          ...editing, ...form,
-          purchasePrice: Number(form.purchasePrice) || 0,
-          salePrice: Number(form.salePrice) || 0,
-          qtyCurrent: Number(form.qtyCurrent) || 0,
-          minQty: Number(form.minQty) || 0,
+          ...d.products[i], ...shared,
+          qtyCurrent: qty,
+          qtyPrincipal: Math.max(Number(d.products[i].qtyPrincipal) || 0, qty),
+          // Turning the tracking off drops a stale date instead of keeping it hidden
+          expiration: form.trackExpiration ? d.products[i].expiration || "" : "",
         };
       });
     } else {
       const p = {
-        id: uid(), name: form.name.trim(), description: form.description, brand: form.brand,
-        categoryId: form.categoryId, barcode: form.barcode,
-        purchasePrice: Number(form.purchasePrice) || 0, salePrice: Number(form.salePrice) || 0,
-        qtyPrincipal: Number(form.qtyCurrent) || 0, qtyCurrent: Number(form.qtyCurrent) || 0,
-        minQty: Number(form.minQty) || 0, expiration: form.expiration, createdAt: todayISO(),
+        id: uid(), ...shared,
+        purchasePrice: 0, salePrice: 0, minQty: 0,
+        qtyPrincipal: qty, qtyCurrent: qty,
+        expiration: "", createdAt: todayISO(),
       };
       update((d) => d.products.push(p));
       onCreated?.(p);
@@ -73,7 +111,7 @@ export function ProductForm({ editing, onClose, onCreated }) {
                 {db.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </Select>
             </div>
-            <Btn variant="soft" icon={Plus} type="button" onClick={() => setNewCat(newCat === null ? "" : null)}>
+            <Btn variant="soft" icon={Plus} onClick={() => setNewCat(newCat === null ? "" : null)}>
               {t("Nouvelle catégorie")}
             </Btn>
           </div>
@@ -81,28 +119,77 @@ export function ProductForm({ editing, onClose, onCreated }) {
             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
               className="mt-2 flex gap-2">
               <Input placeholder={t("Nom de la catégorie")} value={newCat} onChange={(e) => setNewCat(e.target.value)} />
-              <Btn type="button" onClick={addCategory}>{t("Ajouter")}</Btn>
+              <Btn onClick={addCategory}>{t("Ajouter")}</Btn>
             </motion.div>
           )}
         </Field>
-        <Field label={t("Code-barres")}>
-          <Input value={form.barcode} onChange={set("barcode")} />
-        </Field>
-        <Field label={t("Date d'expiration")}>
-          <Input type="date" value={form.expiration} onChange={set("expiration")} />
-        </Field>
-        <Field label={t("Prix d'achat")}>
-          <Input type="number" min="0" value={form.purchasePrice} onChange={set("purchasePrice")} />
-        </Field>
-        <Field label={t("Prix de vente")}>
-          <Input type="number" min="0" value={form.salePrice} onChange={set("salePrice")} />
-        </Field>
-        <Field label={editing ? t("Quantité actuelle") : t("Quantité initiale")}>
+
+        <Field label={t("Quantité en stock")}>
           <Input type="number" min="0" value={form.qtyCurrent} onChange={set("qtyCurrent")} />
         </Field>
-        <Field label={t("Quantité minimale (alerte)")}>
-          <Input type="number" min="0" value={form.minQty} onChange={set("minQty")} />
+
+        {/* Expiry is only a yes/no here — the date itself is captured on the purchase */}
+        <Field label={t("Date d'expiration")}>
+          <label className="flex h-[46px] cursor-pointer items-center gap-2.5 rounded-xl border border-primary-200 bg-primary-50/40 px-3.5">
+            <input type="checkbox" className="h-4 w-4 accent-primary-600"
+              checked={!!form.trackExpiration}
+              onChange={(e) => setForm((f) => ({ ...f, trackExpiration: e.target.checked }))} />
+            <span className="text-[13px] font-semibold text-primary-900">{t("Ce produit expire")}</span>
+          </label>
         </Field>
+        <AnimatePresence initial={false}>
+          {form.trackExpiration && (
+            <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden rounded-xl bg-sky-50 px-4 py-2.5 text-xs text-sky-700 sm:col-span-2">
+              <CalendarClock size={13} className="me-1 inline" />
+              {t("La date d'expiration sera demandée lors de l'achat de ce produit.")}
+              {editing?.expiration ? ` ${t("Date actuelle")} : ${fmtDate(editing.expiration, lang)}` : ""}
+            </motion.p>
+          )}
+        </AnimatePresence>
+
+        {/* ---- barcode: generate, preview, print ---- */}
+        <div className="rounded-xl border border-primary-100 bg-primary-50/30 p-4 sm:col-span-2">
+          <Field label={t("Code-barres (EAN-13)")}>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <Input value={form.barcode} onChange={set("barcode")} inputMode="numeric"
+                  className="input font-mono" placeholder={t("Laissez vide ou générez un code")} />
+              </div>
+              <Btn variant="soft" icon={Shuffle} onClick={() => setForm((f) => ({ ...f, barcode: randomEan13() }))}>
+                {t("Aléatoire")}
+              </Btn>
+            </div>
+          </Field>
+          {hasCode && (
+            <>
+              <div className="mt-2">
+                {codeValid
+                  ? <Badge color="green"><Check size={11} /> {t("Code valide")}</Badge>
+                  : <Badge color="orange">{t("Sera corrigé automatiquement")} → <span className="font-mono">{normalizeEan13(form.barcode)}</span></Badge>}
+              </div>
+              <div className="mt-3 grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto]">
+                <div className="rounded-xl bg-white p-2">
+                  <BarcodeLabel entry={{
+                    name: form.name || t("Nom du produit"),
+                    code: normalizeEan13(form.barcode),
+                    price: editing?.salePrice || editing?.purchasePrice || 0,
+                  }} />
+                </div>
+                <div className="flex items-end gap-2">
+                  <Field label={t("Copies")}>
+                    <Input type="number" min="1" max="200" value={copies}
+                      onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
+                      className="input w-24 text-center" />
+                  </Field>
+                  <Btn variant="soft" icon={Printer} onClick={printLabel}>{t("Imprimer l'étiquette")}</Btn>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
         <Field label={t("Description")} className="sm:col-span-2">
           <Textarea value={form.description} onChange={set("description")} />
         </Field>
@@ -131,7 +218,10 @@ function ProductView({ product, onClose }) {
       <InfoRow label={t("Quantité principale")} value={product.qtyPrincipal} />
       <InfoRow label={t("Quantité actuelle")} value={product.qtyCurrent} />
       <InfoRow label={t("Quantité minimale (alerte)")} value={product.minQty} />
-      <InfoRow label={t("Date d'expiration")} value={product.expiration ? fmtDate(product.expiration, lang) : "—"} />
+      <InfoRow label={t("Date d'expiration")}
+        value={product.trackExpiration
+          ? (product.expiration ? fmtDate(product.expiration, lang) : t("À définir lors de l'achat"))
+          : t("Non suivie")} />
       <InfoRow label={t("Ajouté le")} value={fmtDate(product.createdAt, lang)} />
     </Modal>
   );

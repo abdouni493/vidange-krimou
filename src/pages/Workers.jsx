@@ -10,6 +10,7 @@ import { NAV } from "../components/Layout";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
   Empty, PageHeader, CardGrid, itemRise, Badge, InfoRow, MoneyLine, Steps,
+  StepPane,
 } from "../components/ui";
 
 const ACTION_LABELS = {
@@ -20,14 +21,20 @@ const ACTION_LABELS = {
 };
 
 // ===== Create / edit worker wizard =====
+const LAST_STEP = 2;
+
 function WorkerWizard({ editing, onClose }) {
-  const { db, update, t } = useApp();
+  const { db, update, t, createWorkerAccount } = useApp();
   const [step, setStep] = useState(0);
-  const [form, setForm] = useState(editing || {
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+  // Workers stored before `pay`/`account` existed must not blow up the form
+  const [form, setForm] = useState(() => ({
     fullName: "", birthday: "", idCard: "", phone: "", roleId: "", startDate: todayISO(),
-    pay: { enabled: false, mode: "month", amount: "", percent: 10 },
-    account: { enabled: false, email: "", username: "", password: "" },
-  });
+    ...(editing || {}),
+    pay: { enabled: false, mode: "month", amount: "", percent: 10, ...(editing?.pay || {}) },
+    account: { enabled: false, email: "", username: "", password: "", ...(editing?.account || {}) },
+  }));
   const [newRole, setNewRole] = useState(null);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const setPay = (k, v) => setForm((f) => ({ ...f, pay: { ...f.pay, [k]: v } }));
@@ -41,16 +48,78 @@ function WorkerWizard({ editing, onClose }) {
     setNewRole(null);
   };
 
-  const save = () => {
-    if (!form.fullName.trim()) return;
+  const validate = (s) => {
+    setErr("");
+    if (s === 0 && !form.fullName.trim()) { setErr(t("Le nom complet est obligatoire")); return false; }
+    if (s === 2 && form.account.enabled && !form.userId) {
+      // Le compte n'existe pas encore cote Supabase : il faut de quoi le creer.
+      if (!form.account.email.trim()) { setErr(t("L'email est obligatoire pour créer le compte")); return false; }
+      if (!form.account.username.trim()) { setErr(t("Le nom d'utilisateur est obligatoire")); return false; }
+      if ((form.account.password || "").length < 6) {
+        setErr(t("Le mot de passe doit contenir au moins 6 caractères")); return false;
+      }
+    }
+    return true;
+  };
+
+  const next = () => {
+    if (!validate(step)) return;
+    setStep((s) => Math.min(LAST_STEP, s + 1));
+  };
+
+  /**
+   * Enregistre la fiche, et ouvre au besoin l'acces a l'application.
+   *
+   * Le mot de passe n'est jamais stocke dans la base : le compte est cree dans
+   * Supabase Auth, et la fiche ne conserve que l'identifiant du compte. Les
+   * droits accordes ensuite via « Permissions » suivent ce compte.
+   */
+  const save = async () => {
+    // Reached only from the last step, and every earlier step is re-checked here
+    for (let s = 0; s <= LAST_STEP; s++) {
+      if (!validate(s)) { setStep(s); return; }
+    }
+
+    const workerId = editing?.id || uid();
+    const pay = {
+      ...form.pay,
+      amount: Number(form.pay.amount) || 0,
+      percent: Number(form.pay.percent) || 0,
+    };
+
+    let userId = form.userId || "";
+    if (form.account.enabled && !userId) {
+      setBusy(true);
+      const res = await createWorkerAccount({
+        workerId,
+        fullName: form.fullName,
+        username: form.account.username,
+        email: form.account.email,
+        password: form.account.password,
+      });
+      setBusy(false);
+      if (res.error) {
+        setStep(2);
+        setErr(/already/i.test(res.error) ? t("Un compte existe déjà avec cet email") : res.error);
+        return;
+      }
+      userId = res.userId;
+    }
+
+    // Le mot de passe ne quitte pas ce formulaire.
+    const account = {
+      enabled: !!form.account.enabled,
+      email: form.account.email,
+      username: form.account.username,
+    };
+
     update((d) => {
       if (editing) {
         const i = d.workers.findIndex((w) => w.id === editing.id);
-        d.workers[i] = { ...editing, ...form, pay: { ...form.pay, amount: Number(form.pay.amount) || 0 } };
+        if (i >= 0) d.workers[i] = { ...d.workers[i], ...form, id: workerId, pay, account, userId };
       } else {
         d.workers.push({
-          id: uid(), ...form,
-          pay: { ...form.pay, amount: Number(form.pay.amount) || 0, percent: Number(form.pay.percent) || 0 },
+          id: workerId, ...form, pay, account, userId,
           permissions: {}, advances: [], absences: [], payments: [], settledRepairIds: [],
         });
       }
@@ -65,15 +134,16 @@ function WorkerWizard({ editing, onClose }) {
       footer={
         <>
           {step > 0 && <Btn variant="ghost" onClick={() => setStep(step - 1)}>{t("Précédent")}</Btn>}
-          {step < 2
-            ? <Btn onClick={() => setStep(step + 1)}>{t("Suivant")}</Btn>
-            : <Btn variant="accent" onClick={save}>{t("Enregistrer")}</Btn>}
+          {step < LAST_STEP
+            ? <Btn onClick={next}>{t("Suivant")}</Btn>
+            : <Btn variant="accent" onClick={save} disabled={busy}>
+                {busy ? t("Création du compte…") : t("Enregistrer")}
+              </Btn>}
         </>
       }>
       <Steps labels={steps} current={step} />
-      <AnimatePresence mode="wait">
-        <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }}
-          exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.2 }}>
+      <StepPane step={step}>
+        <div>
           {step === 0 && (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <Field label={t("Nom complet")} required>
@@ -150,23 +220,35 @@ function WorkerWizard({ editing, onClose }) {
               <AnimatePresence>
                 {form.account.enabled && (
                   <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }} className="grid grid-cols-1 gap-4 overflow-hidden sm:grid-cols-3">
-                    <Field label={t("Email")}>
-                      <Input type="email" value={form.account.email} onChange={(e) => setAcc("email", e.target.value)} />
-                    </Field>
-                    <Field label={t("Nom d'utilisateur")}>
-                      <Input value={form.account.username} onChange={(e) => setAcc("username", e.target.value)} />
-                    </Field>
-                    <Field label={t("Mot de passe")}>
-                      <Input value={form.account.password} onChange={(e) => setAcc("password", e.target.value)} />
-                    </Field>
+                    exit={{ opacity: 0, height: 0 }} className="space-y-4 overflow-hidden">
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <Field label={t("Email")} required={!form.userId}>
+                        <Input type="email" value={form.account.email} disabled={!!form.userId}
+                          onChange={(e) => setAcc("email", e.target.value)} />
+                      </Field>
+                      <Field label={t("Nom d'utilisateur")} required={!form.userId}>
+                        <Input value={form.account.username} onChange={(e) => setAcc("username", e.target.value)} />
+                      </Field>
+                      {!form.userId && (
+                        <Field label={t("Mot de passe")} required hint={t("6 caractères minimum")}>
+                          <Input type="text" autoComplete="new-password" value={form.account.password}
+                            onChange={(e) => setAcc("password", e.target.value)} />
+                        </Field>
+                      )}
+                    </div>
+                    <p className="rounded-xl bg-sky-50 px-4 py-2.5 text-xs leading-snug text-sky-700">
+                      {form.userId
+                        ? t("Le compte existe déjà. L'employé change son mot de passe depuis « Paramètres › Mon compte ».")
+                        : t("L'employé se connectera avec cet email ou ce nom d'utilisateur. Il ne verra que les interfaces et les boutons cochés dans « Permissions ».")}
+                    </p>
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
           )}
-        </motion.div>
-      </AnimatePresence>
+        </div>
+      </StepPane>
+      {err && <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-600" role="alert">{err}</p>}
     </Modal>
   );
 }

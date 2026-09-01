@@ -5,7 +5,10 @@ import {
   HardHat, Boxes, Landmark, Printer,
 } from "lucide-react";
 import { useApp } from "../context";
-import { dayOffset, todayISO, fmtMoney, fmtDate, paidOf, inRange, printHTML } from "../store";
+import {
+  dayOffset, todayISO, fmtMoney, fmtDate, paidOf, inRange, printHTML, esc,
+  saleAmounts, clientNameOf,
+} from "../store";
 import { Btn, Field, Input, PageHeader, MoneyLine, Badge, listStagger, itemRise } from "../components/ui";
 
 function Section({ icon: Icon, title, children, extra }) {
@@ -34,10 +37,23 @@ export default function Reports() {
     const canceled = repairs.filter((r) => r.status === "canceled");
     const active = repairs.filter((r) => r.status !== "canceled");
 
-    const salesTotal = active.reduce((s, r) => s + Number(r.total), 0);
-    const salesPaid = db.repairs.filter((r) => r.status !== "canceled")
+    // Repairs / appointments
+    const repairsTotal = active.reduce((s, r) => s + Number(r.total), 0);
+    const repairsPaid = db.repairs.filter((r) => r.status !== "canceled")
       .flatMap((r) => r.payments || []).filter((p) => inRange(p.date, from, to))
       .reduce((s, p) => s + Number(p.amount), 0);
+
+    // Counter sales (POS)
+    const sales = (db.sales || []).filter((s) => inRange(s.date, from, to));
+    const posTotal = sales.reduce((s, x) => s + saleAmounts(x).total, 0);
+    const posPaid = (db.sales || []).flatMap((s) => s.payments || [])
+      .filter((p) => inRange(p.date, from, to)).reduce((s, p) => s + Number(p.amount), 0);
+    const posItems = sales.reduce((n, s) => n + (s.items || []).reduce((m, it) => m + (Number(it.qty) || 0), 0), 0);
+    const posDiscount = sales.reduce((s, x) => s + saleAmounts(x).discount, 0);
+
+    // Both streams together — this is the figure the "chiffre d'affaires" tile shows
+    const salesTotal = repairsTotal + posTotal;
+    const salesPaid = repairsPaid + posPaid;
 
     const purchases = db.purchases.filter((a) => inRange(a.date, from, to));
     const purchTotal = purchases.reduce((s, a) => s + Number(a.total), 0);
@@ -69,7 +85,9 @@ export default function Reports() {
     const clientDebts = db.clients.map((c) => {
       const rest = db.repairs
         .filter((r) => r.clientId === c.id && r.status !== "canceled")
-        .reduce((s, r) => s + Math.max(0, Number(r.total) - paidOf(r.payments)), 0);
+        .reduce((s, r) => s + Math.max(0, Number(r.total) - paidOf(r.payments)), 0)
+        + (db.sales || []).filter((s) => s.clientId === c.id)
+          .reduce((s, x) => s + saleAmounts(x).rest, 0);
       return { name: c.name, phone: c.phone, rest };
     }).filter((x) => x.rest > 0);
 
@@ -87,6 +105,7 @@ export default function Reports() {
 
     setReport({
       finalized, pending, canceled, salesTotal, salesPaid,
+      repairsTotal, repairsPaid, sales, posTotal, posPaid, posItems, posDiscount,
       purchases, purchTotal, purchPaid, expenses, expTotal, expByCat,
       caisseByCat, workerPays, workerTotal, clientDebts, supplierDebts,
       stockValue, lowStock, gain,
@@ -104,6 +123,8 @@ export default function Reports() {
       <h2>${t("Résumé")}</h2>
       <table>
         ${line(t("Chiffre d'affaires"), fmtMoney(report.salesPaid))}
+        ${line(`&nbsp;&nbsp;${t("dont ventes comptoir")}`, fmtMoney(report.posPaid))}
+        ${line(`&nbsp;&nbsp;${t("dont réparations")}`, fmtMoney(report.repairsPaid))}
         ${line(t("Achats de la période"), fmtMoney(report.purchPaid))}
         ${line(t("Dépenses"), fmtMoney(report.expTotal))}
         ${line(t("Paiements employés"), fmtMoney(report.workerTotal))}
@@ -112,12 +133,18 @@ export default function Reports() {
         ${line(t("Dettes fournisseurs"), fmtMoney(report.supplierDebtTotal))}
         ${line(t("Valeur du stock"), fmtMoney(report.stockValue))}
       </table>
+      <h2>${t("Ventes comptoir")}</h2>
+      <table>
+        <tr><th>${t("Référence")}</th><th style="text-align:end">${t("Total")}</th></tr>
+        ${report.sales.map((s) => line(esc(`${s.ref} — ${clientNameOf(db, s.clientId, t)}`), fmtMoney(saleAmounts(s).total))).join("")
+          || line(t("Aucune vente pour le moment"), "—")}
+      </table>
       <h2>${t("Dépenses par catégorie")}</h2>
       <table>${Object.entries(report.expByCat).map(([k, v]) => line(k, fmtMoney(v))).join("")}</table>
       <h2>${t("Dettes clients")}</h2>
-      <table>${report.clientDebts.map((c) => line(`${c.name} (${c.phone})`, fmtMoney(c.rest))).join("")}</table>
+      <table>${report.clientDebts.map((c) => line(esc(`${c.name} (${c.phone})`), fmtMoney(c.rest))).join("")}</table>
       <h2>${t("Dettes fournisseurs")}</h2>
-      <table>${report.supplierDebts.map((s) => line(s.name, fmtMoney(s.rest))).join("")}</table>
+      <table>${report.supplierDebts.map((s) => line(esc(s.name), fmtMoney(s.rest))).join("")}</table>
     `);
   };
 
@@ -160,15 +187,32 @@ export default function Reports() {
           </motion.div>
 
           <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
-            <Section icon={Wallet} title={t("Ventes & réparations")}
+            <Section icon={Wallet} title={t("Réparations & RDV")}
               extra={<Badge>{report.finalized.length + report.pending.length + report.canceled.length}</Badge>}>
               <div className="space-y-1.5">
                 <MoneyLine label={`${report.finalized.length} ${t("finalisées")}`} value={fmtMoney(report.finalized.reduce((s, r) => s + Number(r.total), 0))} />
                 <MoneyLine label={`${report.pending.length} ${t("en attente")}`} value={fmtMoney(report.pending.reduce((s, r) => s + Number(r.total), 0))} />
                 <MoneyLine label={`${report.canceled.length} ${t("annulées")}`} value="—" />
                 <div className="border-t border-primary-100 pt-2">
-                  <MoneyLine label={t("Total")} value={fmtMoney(report.salesTotal)} big />
-                  <MoneyLine label={t("Payé")} value={fmtMoney(report.salesPaid)} color="text-emerald-600" />
+                  <MoneyLine label={t("Total")} value={fmtMoney(report.repairsTotal)} big />
+                  <MoneyLine label={t("Payé")} value={fmtMoney(report.repairsPaid)} color="text-emerald-600" />
+                </div>
+              </div>
+            </Section>
+
+            <Section icon={Receipt} title={t("Ventes comptoir")} extra={<Badge>{report.sales.length}</Badge>}>
+              <div className="space-y-1.5">
+                {report.sales.slice(0, 6).map((s) => (
+                  <MoneyLine key={s.id} label={`${s.ref} · ${clientNameOf(db, s.clientId, t)}`}
+                    value={fmtMoney(saleAmounts(s).total)} />
+                ))}
+                {report.sales.length === 0 && <p className="text-xs text-slate-400">{t("Aucune vente pour le moment")}</p>}
+                <div className="border-t border-primary-100 pt-2">
+                  <MoneyLine label={`${report.posItems} ${t("articles vendus")}`} value={fmtMoney(report.posTotal)} big />
+                  <MoneyLine label={t("Payé")} value={fmtMoney(report.posPaid)} color="text-emerald-600" />
+                  {report.posDiscount > 0 && (
+                    <MoneyLine label={t("Réductions accordées")} value={fmtMoney(report.posDiscount)} color="text-accent-600" />
+                  )}
                 </div>
               </div>
             </Section>

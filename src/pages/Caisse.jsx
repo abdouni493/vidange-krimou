@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, ArrowDownCircle, ArrowUpCircle, Landmark, Wallet, Receipt } from "lucide-react";
 import { useApp } from "../context";
-import { uid, todayISO, fmtMoney, fmtDate, presetRange, inRange, paidOf } from "../store";
+import { uid, todayISO, fmtMoney, fmtDate, presetRange, inRange, clientNameOf } from "../store";
 import {
   Btn, Modal, Field, Input, Textarea, Select, Empty, PageHeader, Seg,
   Badge, MoneyLine, CountUp,
@@ -87,15 +87,24 @@ export default function Caisse() {
   const range = preset === "period" ? period : presetRange(preset);
 
   const data = useMemo(() => {
-    // client payments (encaissements) from repairs, flattened
-    const clientPayments = db.repairs
-      .filter((r) => r.status !== "canceled")
-      .flatMap((r) =>
-        (r.payments || []).map((p) => ({
-          ...p, clientName: db.clients.find((c) => c.id === r.clientId)?.name || "—",
-          type: r.type,
+    // Everything a client hands over: repair/appointment settlements *and*
+    // counter sales — both land in the same till.
+    const clientPayments = [
+      ...db.repairs
+        .filter((r) => r.status !== "canceled")
+        .flatMap((r) =>
+          (r.payments || []).map((p) => ({
+            ...p, clientName: clientNameOf(db, r.clientId, t),
+            source: r.type === "appointment" ? "Rendez-vous" : "Réparation",
+          }))
+        ),
+      ...(db.sales || []).flatMap((s) =>
+        (s.payments || []).map((p) => ({
+          ...p, clientName: clientNameOf(db, s.clientId, t),
+          source: "Vente", ref: s.ref,
         }))
-      );
+      ),
+    ];
     const inP = (arr, get = (x) => x.date) => arr.filter((x) => inRange(get(x), range.from, range.to));
 
     const pays = inP(clientPayments).sort((a, b) => b.date.localeCompare(a.date));
@@ -115,7 +124,7 @@ export default function Caisse() {
       + db.purchases.flatMap((a) => a.payments || []).reduce((s, p) => s + Number(p.amount), 0);
 
     return { pays, trans, exps, totalIn, totalOut, balance: allIn - allOut };
-  }, [db, range.from, range.to]);
+  }, [db, range.from, range.to, t]);
 
   const catName = (id) => db.caisseCategories.find((c) => c.id === id)?.name;
 
@@ -172,7 +181,9 @@ export default function Caisse() {
               <div key={p.id} className="flex items-center justify-between rounded-xl border border-primary-50 bg-surface px-3.5 py-2.5">
                 <div>
                   <p className="text-[13px] font-semibold text-primary-900">{p.clientName}</p>
-                  <p className="text-[11px] text-slate-400">{fmtDate(p.date, lang)} · {t(p.type === "appointment" ? "Rendez-vous" : "Réparation")}</p>
+                  <p className="text-[11px] text-slate-400">
+                    {fmtDate(p.date, lang)} · {t(p.source)}{p.ref ? ` · ${p.ref}` : ""}
+                  </p>
                 </div>
                 <span className="font-mono text-sm font-bold text-emerald-600">+{fmtMoney(p.amount)}</span>
               </div>

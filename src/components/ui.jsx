@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion, animate } from "framer-motion";
 import { X, Search, AlertTriangle, Inbox, LayoutGrid, Table2, ChevronDown } from "lucide-react";
 import { useApp } from "../context";
+import { fmtMoney } from "../store";
+import { ean13Svg, DEFAULT_LABEL_OPTS } from "../barcode";
 
 // ===== Animated number (count-up) =====
 export function CountUp({ value, format = (v) => Math.round(v).toLocaleString("fr-FR") }) {
@@ -30,9 +32,12 @@ const variants = {
   outline: "border border-primary-300 text-primary-700 hover:bg-primary-50",
 };
 
-export function Btn({ variant = "primary", icon: Icon, children, className = "", ...props }) {
+// `type` defaults to "button": a bare <button> submits its form, which inside a
+// wizard would fire the final action instead of the step it was clicked on.
+export function Btn({ variant = "primary", icon: Icon, children, className = "", type = "button", ...props }) {
   return (
     <motion.button
+      type={type}
       whileTap={{ scale: 0.96 }}
       whileHover={{ y: -1 }}
       className={`${btnBase} ${variants[variant]} ${className}`}
@@ -44,9 +49,10 @@ export function Btn({ variant = "primary", icon: Icon, children, className = "",
   );
 }
 
-export function IconBtn({ icon: Icon, title, variant = "ghost", className = "", ...props }) {
+export function IconBtn({ icon: Icon, title, variant = "ghost", className = "", type = "button", ...props }) {
   return (
     <motion.button
+      type={type}
       whileTap={{ scale: 0.9 }}
       whileHover={{ scale: 1.08 }}
       title={title}
@@ -60,14 +66,16 @@ export function IconBtn({ icon: Icon, title, variant = "ghost", className = "", 
 }
 
 // ===== Modal =====
-export function Modal({ open, onClose, title, children, width = "max-w-2xl", footer }) {
+// `zIndex` lets a nested dialog (the barcode scanner opened from a wizard)
+// stack above the dialog that launched it.
+export function Modal({ open, onClose, title, children, width = "max-w-2xl", footer, zIndex = 100 }) {
   const reduce = useReducedMotion();
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-primary-950/40 p-4 backdrop-blur-sm sm:p-8"
-          style={{ backgroundColor: "rgba(30,20,60,0.45)" }}
+          className="fixed inset-0 flex items-start justify-center overflow-y-auto bg-primary-950/40 p-4 backdrop-blur-sm sm:p-8"
+          style={{ backgroundColor: "rgba(30,20,60,0.45)", zIndex }}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
           transition={{ duration: 0.18 }}
           onMouseDown={(e) => e.target === e.currentTarget && onClose?.()}
@@ -97,14 +105,16 @@ export function Modal({ open, onClose, title, children, width = "max-w-2xl", foo
   );
 }
 
-export function Confirm({ open, onClose, onConfirm, title, message }) {
+export function Confirm({ open, onClose, onConfirm, title, message, confirmLabel }) {
   const { t } = useApp();
   return (
     <Modal open={open} onClose={onClose} title={title || t("Êtes-vous sûr ?")} width="max-w-md"
       footer={
         <>
           <Btn variant="ghost" onClick={onClose}>{t("Annuler")}</Btn>
-          <Btn variant="danger" onClick={() => { onConfirm(); onClose(); }}>{t("Oui, supprimer")}</Btn>
+          <Btn variant="danger" onClick={() => { onConfirm(); onClose(); }}>
+            {confirmLabel || t("Oui, supprimer")}
+          </Btn>
         </>
       }
     >
@@ -140,11 +150,12 @@ export function Select({ children, ...props }) {
   );
 }
 
-export function SearchBox({ value, onChange, placeholder }) {
+export function SearchBox({ value, onChange, placeholder, ...rest }) {
   return (
     <div className="relative">
       <Search size={16} className="absolute start-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-      <input className="input ps-10" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} />
+      <input className="input ps-10" value={value} onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder} {...rest} />
     </div>
   );
 }
@@ -230,6 +241,27 @@ export function Steps({ labels, current }) {
   );
 }
 
+/**
+ * Body of one wizard step.
+ *
+ * The keyed remount replays the entrance animation on every step change, and
+ * there is deliberately no exit animation: an `AnimatePresence mode="wait"`
+ * around wizard steps can freeze mid-transition and leave the step blank, which
+ * looks like "the wizard refuses to advance" (same fix as the page shell).
+ */
+export function StepPane({ step, children }) {
+  return (
+    <motion.div
+      key={step}
+      initial={{ opacity: 0, x: 24 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 // ===== Segmented filter =====
 export function Seg({ options, value, onChange }) {
   return (
@@ -292,6 +324,33 @@ export function InfoRow({ label, value }) {
     <div className="flex items-start justify-between gap-4 border-b border-primary-50 py-2 last:border-0">
       <span className="text-[13px] text-slate-500">{label}</span>
       <span className="text-end text-[13px] font-semibold text-primary-900">{value ?? "—"}</span>
+    </div>
+  );
+}
+
+// ===== Barcode label — the on-screen twin of what `printLabels` puts on paper =====
+export function BarcodeLabel({ entry, opts = DEFAULT_LABEL_OPTS }) {
+  const { db } = useApp();
+  const svg = useMemo(
+    () => ean13Svg(entry.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode }),
+    [entry.code, opts.showCode]
+  );
+  return (
+    <div className={`flex flex-col items-center justify-center gap-1 rounded-lg bg-white px-3 py-2.5 ${
+      opts.cutLines ? "border border-dashed border-primary-200" : "border border-transparent"
+    }`}>
+      {opts.showStore && db.settings.name && (
+        <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{db.settings.name}</p>
+      )}
+      {opts.showName && (
+        <p className="line-clamp-2 text-center text-[11px] font-bold leading-tight text-primary-900">
+          {entry.name || "—"}
+        </p>
+      )}
+      <div className="w-full max-w-[210px]" dangerouslySetInnerHTML={{ __html: svg }} />
+      {opts.showPrice && Number(entry.price) > 0 && (
+        <p className="font-mono text-xs font-extrabold text-primary-900">{fmtMoney(entry.price)}</p>
+      )}
     </div>
   );
 }

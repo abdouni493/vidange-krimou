@@ -1,0 +1,4 @@
+# Les fichiers batch Windows exigent des fins de ligne CRLF :
+# avec des fins LF, `goto` échoue silencieusement.
+*.bat text eol=crlf
+*.ps1 text eol=crlf

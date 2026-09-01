@@ -3,14 +3,24 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
+    "start": "node server/index.js",
     "dev": "vite",
+    "dev:server": "node server/index.js",
     "build": "vite build",
-    "preview": "vite preview"
+    "serve": "npm run build && node server/index.js",
+    "preview": "vite preview",
+    "test": "node tools/test-remote.mjs"
   },
   "dependencies": {
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
+    "@supabase/supabase-js": "^2.112.4",
+    "@zxing/browser": "^0.2.1",
+    "@zxing/library": "^0.23.0",
     "framer-motion": "^11.11.9",
     "lucide-react": "^0.462.0",
     "react": "^18.3.1",

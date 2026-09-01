@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   LayoutDashboard, Wrench, Sparkles, Boxes, ShoppingCart, Users, Truck,
   HardHat, Receipt, Landmark, BarChart3, Settings, LogOut, Menu, X, Languages,
-  Barcode,
+  Barcode, Loader2, Check, CloudOff, Store, ScrollText, LineChart,
 } from "lucide-react";
 import { useApp } from "../context";
 
@@ -14,12 +14,15 @@ export const NAV = [
   { key: "stock", label: "Gestion de stock", icon: Boxes },
   { key: "barcodes", label: "Codes-barres", icon: Barcode },
   { key: "purchases", label: "Achats", icon: ShoppingCart },
+  { key: "pos", label: "Point de vente", icon: Store },
+  { key: "sales", label: "Ventes", icon: ScrollText },
   { key: "clients", label: "Clients", icon: Users },
   { key: "suppliers", label: "Fournisseurs", icon: Truck },
   { key: "workers", label: "Employés", icon: HardHat },
   { key: "expenses", label: "Dépenses", icon: Receipt },
   { key: "caisse", label: "Caisse", icon: Landmark },
   { key: "reports", label: "Rapports", icon: BarChart3 },
+  { key: "analytics", label: "Analyse", icon: LineChart },
   { key: "settings", label: "Paramètres", icon: Settings },
 ];
 
@@ -39,6 +42,24 @@ function LangSwitch() {
         </button>
       ))}
     </div>
+  );
+}
+
+// Writes are debounced and asynchronous, so surface where they stand.
+function SaveState() {
+  const { saveState, t } = useApp();
+  if (saveState === "idle") return null;
+  const map = {
+    saving: { icon: Loader2, label: t("Enregistrement…"), cls: "text-slate-400", spin: true },
+    saved: { icon: Check, label: t("Enregistré"), cls: "text-emerald-600" },
+    error: { icon: CloudOff, label: t("Non enregistré"), cls: "text-red-600" },
+  };
+  const { icon: Icon, label, cls, spin } = map[saveState];
+  return (
+    <span className={`hidden items-center gap-1.5 text-xs font-medium sm:inline-flex ${cls}`} title={label}>
+      <Icon size={14} className={spin ? "animate-spin" : ""} />
+      {label}
+    </span>
   );
 }
 
@@ -161,7 +182,10 @@ export default function Layout({ page, setPage, children }) {
               {current ? t(current.label) : ""}
             </motion.span>
           </div>
-          <LangSwitch />
+          <div className="flex items-center gap-3">
+            <SaveState />
+            <LangSwitch />
+          </div>
         </header>
 
         <main className="px-4 py-6 sm:px-8">

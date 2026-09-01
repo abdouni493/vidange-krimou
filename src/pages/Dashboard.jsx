@@ -5,7 +5,10 @@ import {
   Boxes, Users, HardHat, Bell, TrendingUp, Wrench, Receipt,
 } from "lucide-react";
 import { useApp } from "../context";
-import { fmtMoney, fmtDate, paidOf, dayOffset, todayISO, serviceNamesOf } from "../store";
+import {
+  fmtMoney, fmtDate, paidOf, dayOffset, todayISO, serviceNamesOf,
+  saleAmounts, clientNameOf,
+} from "../store";
 import { PageHeader, Badge, StatusBadge, listStagger, itemRise, CountUp } from "../components/ui";
 
 function StatCard({ icon: Icon, label, value, money, sub, grad }) {
@@ -35,22 +38,32 @@ export default function Dashboard() {
     const monthStart = today.slice(0, 8) + "01";
     const active = db.repairs.filter((r) => r.status !== "canceled");
 
-    const revenueMonth = active.flatMap((r) => r.payments || [])
+    // Money in comes from two places: repairs and counter sales
+    const clientPayments = [
+      ...active.flatMap((r) => r.payments || []),
+      ...(db.sales || []).flatMap((s) => s.payments || []),
+    ];
+
+    const revenueMonth = clientPayments
       .filter((p) => p.date >= monthStart).reduce((s, p) => s + Number(p.amount), 0);
     const expensesMonth = db.expenses.filter((e) => e.date >= monthStart)
       .reduce((s, e) => s + Number(e.amount), 0);
     const repairsMonth = active.filter((r) => (r.createdAt || "") >= monthStart).length;
+    const salesMonth = (db.sales || []).filter((s) => (s.date || "") >= monthStart);
 
     const rdvToday = db.repairs.filter((r) => r.status === "pending" && r.dateIn?.slice(0, 10) === today);
     const pending = db.repairs.filter((r) => r.status === "pending");
     const clientDebts = active.map((r) => ({ r, rest: Number(r.total) - paidOf(r.payments) }))
       .filter((x) => x.rest > 0);
-    const clientDebtTotal = clientDebts.reduce((s, x) => s + x.rest, 0);
+    const saleDebts = (db.sales || []).map((s) => ({ s, rest: saleAmounts(s).rest }))
+      .filter((x) => x.rest > 0);
+    const clientDebtTotal = clientDebts.reduce((s, x) => s + x.rest, 0)
+      + saleDebts.reduce((s, x) => s + x.rest, 0);
     const supplierDebtTotal = db.purchases.reduce((s, a) => s + Math.max(0, Number(a.total) - paidOf(a.payments)), 0);
     const lowStock = db.products.filter((p) => Number(p.qtyCurrent) <= Number(p.minQty));
 
     const caisseIn = db.caisse.filter((c) => c.type === "deposit").reduce((s, c) => s + Number(c.amount), 0)
-      + active.flatMap((r) => r.payments || []).reduce((s, p) => s + Number(p.amount), 0);
+      + clientPayments.reduce((s, p) => s + Number(p.amount), 0);
     const caisseOut = db.caisse.filter((c) => c.type === "withdraw").reduce((s, c) => s + Number(c.amount), 0)
       + db.expenses.reduce((s, e) => s + Number(e.amount), 0)
       + db.purchases.flatMap((a) => a.payments || []).reduce((s, p) => s + Number(p.amount), 0);
@@ -59,8 +72,7 @@ export default function Dashboard() {
     const days = Array.from({ length: 7 }, (_, i) => dayOffset(i - 6));
     const chart = days.map((d) => ({
       day: d,
-      total: active.flatMap((r) => r.payments || []).filter((p) => p.date === d)
-        .reduce((s, p) => s + Number(p.amount), 0),
+      total: clientPayments.filter((p) => p.date === d).reduce((s, p) => s + Number(p.amount), 0),
     }));
 
     const upcoming = db.repairs
@@ -70,13 +82,13 @@ export default function Dashboard() {
     const recent = [...db.repairs].sort((a, b) => (b.createdAt || "").localeCompare(a.createdAt || "")).slice(0, 5);
 
     return {
-      revenueMonth, expensesMonth, repairsMonth, rdvToday, pending, clientDebts,
-      clientDebtTotal, supplierDebtTotal, lowStock, caisse: caisseIn - caisseOut,
-      chart, upcoming, recent,
+      revenueMonth, expensesMonth, repairsMonth, salesMonth, rdvToday, pending,
+      clientDebts, saleDebts, clientDebtTotal, supplierDebtTotal, lowStock,
+      caisse: caisseIn - caisseOut, chart, upcoming, recent,
     };
   }, [db]);
 
-  const clientName = (id) => db.clients.find((c) => c.id === id)?.name || "—";
+  const clientName = (id) => clientNameOf(db, id, t);
   const maxChart = Math.max(1, ...stats.chart.map((c) => c.total));
 
   const alerts = [
@@ -87,6 +99,10 @@ export default function Dashboard() {
     ...stats.clientDebts.slice(0, 5).map(({ r, rest }) => ({
       icon: UserX, color: "text-red-500 bg-red-50",
       text: `${t("Dette client :")} ${clientName(r.clientId)} ${t("doit")} ${fmtMoney(rest)}`,
+    })),
+    ...stats.saleDebts.slice(0, 5).map(({ s, rest }) => ({
+      icon: UserX, color: "text-red-500 bg-red-50",
+      text: `${t("Dette client :")} ${clientName(s.clientId)} ${t("doit")} ${fmtMoney(rest)} (${s.ref})`,
     })),
     ...stats.lowStock.slice(0, 5).map((p) => ({
       icon: PackageX, color: "text-primary-500 bg-primary-50",
@@ -100,7 +116,8 @@ export default function Dashboard() {
 
       <motion.div variants={listStagger} initial="hidden" animate="show"
         className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
-        <StatCard icon={Wallet} label={t("Revenus du mois")} money={stats.revenueMonth} grad="grad-primary" />
+        <StatCard icon={Wallet} label={t("Revenus du mois")} money={stats.revenueMonth} grad="grad-primary"
+          sub={`${stats.salesMonth.length} ${t("ventes")} · ${stats.repairsMonth} ${t("réparations")}`} />
         <StatCard icon={Receipt} label={t("Dépenses du mois")} money={stats.expensesMonth} grad="grad-accent" />
         <StatCard icon={CalendarClock} label={t("RDV aujourd'hui")} value={stats.rdvToday.length} grad="bg-gradient-to-br from-sky-500 to-blue-600" />
         <StatCard icon={Hourglass} label={t("En attente")} value={stats.pending.length} grad="bg-gradient-to-br from-amber-400 to-orange-500" />

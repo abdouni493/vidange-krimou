@@ -2,3 +2,17 @@ node_modules/
 dist/
 *.local
 .DS_Store
+
+# Configuration locale : peut pointer un autre projet Supabase
+.env
+.env.local
+
+# Ancienne base SQLite locale (les données vivent maintenant dans Supabase)
+data/
+*.db
+*.db-wal
+*.db-shm
+preview-print/
+
+# Raccourci Windows : chemins absolus, propre a chaque machine
+*.lnk

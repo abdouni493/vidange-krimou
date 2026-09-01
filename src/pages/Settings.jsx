@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Store, UserCog, Database, Upload, Download, RotateCcw, Check, Wrench } from "lucide-react";
+import { Store, UserCog, Database, Upload, Download, RotateCcw, Check, Wrench, Loader2 } from "lucide-react";
 import { useApp } from "../context";
+import { supabase, uploadImage } from "../lib/supabase";
 import { Btn, Field, Input, Textarea, PageHeader } from "../components/ui";
 
 function Saved({ show }) {
@@ -20,19 +21,18 @@ function Saved({ show }) {
 }
 
 export default function Settings() {
-  const { db, update, t, currentUser, restoreData, resetData } = useApp();
+  const { db, update, t, currentUser, restoreData, resetData, changePassword } = useApp();
   const [tab, setTab] = useState("store");
   const [store, setStore] = useState({ ...db.settings });
-  const [account, setAccount] = useState(() => {
-    if (currentUser?.kind === "admin") {
-      const u = db.users.find((x) => x.id === currentUser.id);
-      return { name: u.name, username: u.username, email: u.email, password: u.password };
-    }
-    const w = db.workers.find((x) => x.id === currentUser?.id);
-    return { name: w?.fullName || "", username: w?.account.username || "", email: w?.account.email || "", password: w?.account.password || "" };
-  });
+  const [account, setAccount] = useState(() => ({
+    name: currentUser?.name || "",
+    username: currentUser?.username || "",
+    email: currentUser?.email || "",
+    password: "",
+  }));
   const [saved, setSaved] = useState("");
   const [msg, setMsg] = useState("");
+  const [busy, setBusy] = useState("");
   const fileRef = useRef(null);
   const logoRef = useRef(null);
 
@@ -40,26 +40,78 @@ export default function Settings() {
 
   const saveStore = () => { update((d) => { d.settings = { ...store }; }); flash("store"); };
 
-  const saveAccount = () => {
-    update((d) => {
-      if (currentUser.kind === "admin") {
-        const u = d.users.find((x) => x.id === currentUser.id);
-        Object.assign(u, account);
-      } else {
-        const w = d.workers.find((x) => x.id === currentUser.id);
-        w.fullName = account.name;
-        Object.assign(w.account, { username: account.username, email: account.email, password: account.password });
+  /**
+   * Le nom et l'identifiant vivent dans le profil ; le mot de passe, lui, n'est
+   * connu que de Supabase Auth et se change par un appel dedie. Le champ reste
+   * vide tant qu'on ne veut pas le modifier.
+   */
+  const saveAccount = async () => {
+    setMsg("");
+    setBusy("account");
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: account.name, username: account.username || null })
+        .eq("id", currentUser.userId || currentUser.id);
+      if (error) throw new Error(error.message);
+
+      if (currentUser.kind === "worker") {
+        update((d) => {
+          const w = d.workers.find((x) => x.id === currentUser.id);
+          if (!w) return;
+          w.fullName = account.name;
+          w.account = { ...w.account, username: account.username, email: account.email };
+        });
       }
-    });
-    flash("account");
+
+      if (account.password) {
+        const res = await changePassword(account.password);
+        if (res.error) throw new Error(res.error);
+        setAccount((a) => ({ ...a, password: "" }));
+      }
+      flash("account");
+    } catch (err) {
+      setMsg(err.message || String(err));
+    } finally {
+      setBusy("");
+    }
   };
 
-  const onLogo = (e) => {
+  /**
+   * Le logo part dans le bucket `logos` et seule son URL est stockee : une
+   * facture imprimee ou un poste distant l'affiche alors sans transporter
+   * l'image entiere dans chaque lecture de la base.
+   */
+  const onLogo = async (e) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setStore((s) => ({ ...s, logo: reader.result }));
-    reader.readAsDataURL(file);
+    setMsg("");
+    setBusy("logo");
+    try {
+      const { url } = await uploadImage("logos", file);
+      setStore((s) => ({ ...s, logo: url }));
+      update((d) => { d.settings = { ...d.settings, logo: url }; });
+      flash("store");
+    } catch (err) {
+      setMsg(err.message || String(err));
+    } finally {
+      setBusy("");
+    }
+  };
+
+  // Destructive and irreversible — make the user confirm, and offer the backup first.
+  const wipe = async () => {
+    const ok = window.confirm(
+      t("Toutes les données seront définitivement effacées. Pensez à faire une sauvegarde. Continuer ?")
+    );
+    if (!ok) return;
+    try {
+      await resetData();
+    } catch {
+      setMsg(t("La réinitialisation a échoué"));
+      setTimeout(() => setMsg(""), 3000);
+    }
   };
 
   const backup = () => {
@@ -78,7 +130,7 @@ export default function Settings() {
     reader.onload = () => {
       try {
         const data = JSON.parse(reader.result);
-        if (!data.clients || !data.repairs) throw new Error("bad");
+        if (!Array.isArray(data.clients) || !Array.isArray(data.repairs)) throw new Error("bad");
         restoreData(data);
         setMsg(t("Sauvegarde restaurée avec succès"));
       } catch {
@@ -127,7 +179,11 @@ export default function Settings() {
                 </div>
                 <div>
                   <p className="label mb-2">{t("Logo")}</p>
-                  <Btn variant="soft" icon={Upload} onClick={() => logoRef.current?.click()}>{t("Changer le logo")}</Btn>
+                  <Btn variant="soft" icon={busy === "logo" ? undefined : Upload}
+                    disabled={busy === "logo"} onClick={() => logoRef.current?.click()}>
+                    {busy === "logo" && <Loader2 size={15} className="animate-spin" />}
+                    {busy === "logo" ? t("Envoi…") : t("Changer le logo")}
+                  </Btn>
                   <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={onLogo} />
                 </div>
               </div>
@@ -168,15 +224,19 @@ export default function Settings() {
                 <Field label={t("Nom d'utilisateur")}>
                   <Input value={account.username} onChange={(e) => setAccount({ ...account, username: e.target.value })} />
                 </Field>
-                <Field label={t("Email")}>
-                  <Input type="email" value={account.email} onChange={(e) => setAccount({ ...account, email: e.target.value })} />
+                <Field label={t("Email")} hint={t("L'email de connexion se change depuis Supabase")}>
+                  <Input type="email" value={account.email} disabled />
                 </Field>
-                <Field label={t("Mot de passe")}>
-                  <Input value={account.password} onChange={(e) => setAccount({ ...account, password: e.target.value })} />
+                <Field label={t("Nouveau mot de passe")} hint={t("Laissez vide pour le conserver")}>
+                  <Input type="password" autoComplete="new-password" value={account.password}
+                    onChange={(e) => setAccount({ ...account, password: e.target.value })} />
                 </Field>
               </div>
               <div className="mt-6 flex items-center gap-3">
-                <Btn onClick={saveAccount}>{t("Enregistrer")}</Btn>
+                <Btn onClick={saveAccount} disabled={busy === "account"}>
+                  {busy === "account" && <Loader2 size={15} className="animate-spin" />}
+                  {t("Enregistrer")}
+                </Btn>
                 <Saved show={saved === "account"} />
               </div>
             </div>
@@ -190,9 +250,12 @@ export default function Settings() {
                   {t("Restaurer une sauvegarde")}
                 </Btn>
                 <input ref={fileRef} type="file" accept="application/json" className="hidden" onChange={restore} />
-                <Btn variant="danger" icon={RotateCcw} className="w-full" onClick={resetData}>
-                  {t("Réinitialiser les données de démo")}
+                <Btn variant="danger" icon={RotateCcw} className="w-full" onClick={wipe}>
+                  {t("Vider la base de données")}
                 </Btn>
+                <p className="text-center text-xs text-slate-400">
+                  {t("Efface définitivement toutes les données et vous déconnecte.")}
+                </p>
               </div>
               <AnimatePresence>
                 {msg && (

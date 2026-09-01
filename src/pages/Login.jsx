@@ -2,7 +2,10 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import styled from "@emotion/styled";
 import { keyframes } from "@emotion/react";
-import { Wrench, User, Mail, Lock, AtSign, Languages, Eye, EyeOff, Loader2, ShieldPlus, CheckCircle2 } from "lucide-react";
+import {
+  Wrench, User, Mail, Lock, AtSign, Languages, Eye, EyeOff,
+  Loader2, ShieldPlus, CheckCircle2, AlertTriangle,
+} from "lucide-react";
 import { useApp } from "../context";
 import { Btn, Field, Input } from "../components/ui";
 
@@ -23,7 +26,7 @@ const Blob = styled.div`
 `;
 
 export default function Login() {
-  const { login, register, t, lang, setLang, needsSetup, adminExists } = useApp();
+  const { login, register, t, lang, setLang, needsSetup, adminExists, setupError } = useApp();
   // A fresh project has no administrator yet — open straight on the sign-up form.
   const [mode, setMode] = useState(needsSetup ? "register" : "login");
   const [error, setError] = useState("");
@@ -101,14 +104,21 @@ export default function Login() {
           </div>
 
           <div className="px-8 py-7">
-            {needsSetup ? (
+            {setupError ? (
+              <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                <p className="flex items-center gap-2 text-[13px] font-semibold text-amber-800">
+                  <AlertTriangle size={14} /> {t("Configuration incomplète")}
+                </p>
+                <p className="mt-1 text-xs leading-snug text-amber-700">{setupError}</p>
+              </div>
+            ) : needsSetup ? (
               <div className="mb-6 rounded-xl bg-primary-50 px-4 py-3 text-center">
                 <p className="text-[13px] font-semibold text-primary-800">{t("Première utilisation")}</p>
                 <p className="mt-1 text-xs text-slate-500">
                   {t("Créez le compte administrateur de votre garage pour commencer.")}
                 </p>
               </div>
-            ) : !adminExists ? (
+            ) : !adminExists && !setupError ? (
               /* Tabs — shown only until the administrator account exists */
               <div className="mb-6 grid grid-cols-2 gap-1 rounded-xl bg-primary-50 p-1">
                 {[["login", t("Connexion")], ["register", t("Créer un compte admin")]].map(([m, label]) => (
@@ -197,7 +207,7 @@ export default function Login() {
                 {mode === "login" ? t("Se connecter") : t("Créer un compte")}
               </Btn>
 
-              {!adminExists && mode === "login" && (
+              {!adminExists && !setupError && mode === "login" && (
                 <button type="button" onClick={() => { setMode("register"); setError(""); setNotice(""); }}
                   className="mt-3 w-full text-center text-xs font-semibold text-primary-600 hover:text-primary-800 cursor-pointer">
                   {t("Créer un compte admin")}

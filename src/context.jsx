@@ -9,6 +9,9 @@ import { makeT } from "./i18n";
 const Ctx = createContext(null);
 export const useApp = () => useContext(Ctx);
 
+export const SETUP_HINT =
+  "Base non initialisée : exécutez supabase/schema.sql dans le SQL Editor du projet Supabase.";
+
 // Edits are coalesced for this long before hitting the database, so typing in a
 // form doesn't produce one write per keystroke.
 const SAVE_DELAY = 400;
@@ -34,6 +37,7 @@ export function AppProvider({ children }) {
   const [session, setSession] = useState(null);
   const [profile, setProfile] = useState(null);
   const [adminExists, setAdminExists] = useState(true); // assume yes until told otherwise
+  const [setupError, setSetupError] = useState("");
   const [lang, setLangState] = useState(() => localStorage.getItem(LANG_KEY) || "fr");
 
   const pending = useRef(null);   // newest document waiting to be written
@@ -50,9 +54,20 @@ export function AppProvider({ children }) {
     return data || null;
   }, []);
 
+  // Répond aussi à la question « le schéma est-il installé ? » : tant que la
+  // fonction n'existe pas, on ne peut ni se connecter ni créer l'administrateur,
+  // et il vaut mieux le dire que de masquer le bouton sans explication.
   const refreshAdminExists = useCallback(async () => {
     const { data, error } = await supabase.rpc("admin_exists");
-    if (!error) setAdminExists(!!data);
+    if (!error) {
+      setAdminExists(!!data);
+      setSetupError("");
+      return;
+    }
+    if (error.code === "PGRST202" || /schema cache|not found/i.test(error.message || "")) {
+      setAdminExists(false);
+      setSetupError(SETUP_HINT);
+    }
   }, []);
 
   useEffect(() => {
@@ -274,8 +289,9 @@ export function AppProvider({ children }) {
     login, register, logout, createWorkerAccount, changePassword,
     lang, setLang, t, can,
     // No administrator yet — the login screen offers to create one.
-    needsSetup: !adminExists,
+    needsSetup: !adminExists && !setupError,
     adminExists,
+    setupError,
     resetData: async () => {
       const fresh = await resetRemoteDB();
       pending.current = null;

@@ -578,6 +578,8 @@ export const AR = {
   "Laissez vide pour le conserver": "اتركه فارغا للإبقاء عليها",
   "L'email de connexion se change depuis Supabase": "بريد الدخول يغير من Supabase",
   "Envoi…": "جاري الإرسال…",
+  "Configuration incomplète": "الإعداد غير مكتمل",
+  "Base non initialisée : exécutez supabase/schema.sql dans le SQL Editor du projet Supabase.": "قاعدة البيانات غير مهيأة: نفذ ملف supabase/schema.sql في محرر SQL بمشروع Supabase.",
 };
 
 export function makeT(lang) {

@@ -23,10 +23,13 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
 const fail = (context, error) => {
   const msg = error?.message || String(error);
+  // PGRST205 : PostgREST ne connaît pas la table — le schéma n'a pas été joué.
   const hint =
-    error?.code === "42501" || /row-level security/i.test(msg)
-      ? " — droits insuffisants pour cette opération"
-      : "";
+    error?.code === "PGRST205" || /schema cache/i.test(msg)
+      ? " — exécutez supabase/schema.sql dans le SQL Editor du projet"
+      : error?.code === "42501" || /row-level security/i.test(msg)
+        ? " — droits insuffisants pour cette opération"
+        : "";
   throw new Error(`${context}: ${msg}${hint}`);
 };
 

@@ -8,6 +8,10 @@ Les données vivent dans un **projet Supabase (PostgreSQL)** : comptes, permissi
 
 ## 1. Mettre en place la base (une seule fois)
 
+> Ces deux étapes sont **obligatoires** : au moment de l'écriture, le projet répond bien
+> (la clé anon est valide) mais il est **vide** — aucune table — et **« Confirm email » est encore
+> activé**. Sans elles, l'application affiche « Configuration incomplète » sur l'écran de connexion.
+
 1. Ouvrez le projet Supabase : <https://supabase.com/dashboard/project/oyzbnolbwbrmdaskflbo>
 2. **SQL Editor → New query**, collez tout le contenu de [`supabase/schema.sql`](supabase/schema.sql), puis **Run**.
    Le script crée les tables, les relations, les permissions, les vues de reporting et les buckets d'images. Il est **rejouable** sans perte de données.

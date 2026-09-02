@@ -2,15 +2,16 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Pencil, Trash2, Eye, Package, AlertTriangle, Shuffle, Printer, Check,
-  CalendarClock,
+  CalendarClock, ScanLine,
 } from "lucide-react";
 import { useApp } from "../context";
-import { uid, todayISO, fmtMoney, fmtDate } from "../store";
-import { randomEan13, normalizeEan13, isValidEan13, printLabels } from "../barcode";
+import { uid, todayISO, fmtMoney, fmtDate, findProductByCode } from "../store";
+import { randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels } from "../barcode";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
   Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
 } from "../components/ui";
+import BarcodeScanner from "../components/BarcodeScanner";
 
 /**
  * Shared product form — also embedded in the Purchases interface.
@@ -32,6 +33,7 @@ export function ProductForm({ editing, onClose, onCreated }) {
   }));
   const [newCat, setNewCat] = useState(null); // null | string being typed
   const [copies, setCopies] = useState(1);
+  const [scanning, setScanning] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const hasCode = !!String(form.barcode || "").trim();
@@ -59,6 +61,25 @@ export function ProductForm({ editing, onClose, onCreated }) {
         dir: lang === "ar" ? "rtl" : "ltr",
       }
     );
+
+  /**
+   * Read the barcode already printed on the box instead of generating one.
+   *
+   * The code has to stay unique: two products sharing it would make the till
+   * ring up whichever comes first, so a code already taken is refused and the
+   * offending product is named.
+   */
+  const onScan = (raw) => {
+    const code = scanToEan13(raw);
+    if (!code) return { ok: false, message: t("Code non reconnu — attendu : EAN-13 ou UPC-A") };
+    const owner = findProductByCode(db, code);
+    if (owner && owner.id !== editing?.id) {
+      return { ok: false, message: `${t("Déjà utilisé par")} ${owner.name}` };
+    }
+    setForm((f) => ({ ...f, barcode: code }));
+    setScanning(false);
+    return { ok: true, message: t("Code repris dans la fiche") };
+  };
 
   const save = () => {
     if (!form.name.trim()) return;
@@ -157,6 +178,9 @@ export function ProductForm({ editing, onClose, onCreated }) {
                 <Input value={form.barcode} onChange={set("barcode")} inputMode="numeric"
                   className="input font-mono" placeholder={t("Laissez vide ou générez un code")} />
               </div>
+              <Btn variant="soft" icon={ScanLine} onClick={() => setScanning(true)}>
+                {t("Scanner")}
+              </Btn>
               <Btn variant="soft" icon={Shuffle} onClick={() => setForm((f) => ({ ...f, barcode: randomEan13() }))}>
                 {t("Aléatoire")}
               </Btn>
@@ -194,6 +218,14 @@ export function ProductForm({ editing, onClose, onCreated }) {
           <Textarea value={form.description} onChange={set("description")} />
         </Field>
       </div>
+
+      <BarcodeScanner
+        open={scanning}
+        onClose={() => setScanning(false)}
+        onScan={onScan}
+        title={t("Scanner un code-barres")}
+        subtitle={t("Visez l'étiquette du fabricant : le code lu est repris dans la fiche produit.")}
+      />
     </Modal>
   );
 }

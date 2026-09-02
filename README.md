@@ -17,6 +17,8 @@ Les données vivent dans un **projet Supabase (PostgreSQL)** : comptes, permissi
    Le script crée les tables, les relations, les permissions, les vues de reporting et les buckets d'images. Il est **rejouable** sans perte de données.
 3. **Authentication → Providers → Email** : décochez **Confirm email**.
    Sans cela, chaque compte créé (admin comme employé) doit d'abord cliquer un lien reçu par mail avant de pouvoir se connecter.
+4. *Facultatif* — pour repartir du stock déjà inventorié plutôt que d'une base vide : **New query**, collez [`supabase/seed-garage.sql`](supabase/seed-garage.sql), puis **Run**.
+   Le script reprend 4 catégories, 9 prestations, 1 fournisseur, 30 produits, 3 achats et 1 réparation. Il est rejouable, et ne crée aucun compte — l'administrateur se crée à l'étape suivante.
 
 Vérification rapide, dans le SQL Editor :
 
@@ -80,13 +82,19 @@ La clé **anon** est publique par nature — elle part dans le bundle du navigat
 
 ## 3. Scanner les codes-barres avec le téléphone
 
-Un bouton **Scanner** ouvre la caméra dans trois endroits :
+Un bouton **Scanner** ouvre la caméra dans quatre endroits :
 
 - **Réparations & RDV** → assistant de création, étape *Services* → **Produits du stock**
 - **Réparations & RDV** → **Finalisation** d'un rendez-vous
 - **Point de vente**
+- **Gestion de stock** → fiche produit, encadré *Code-barres* (également l'ajout de produit depuis **Achats**)
 
-Chaque code reconnu ajoute la pièce à la fiche (ou incrémente sa quantité) et affiche le nom du produit. Le scanner reste ouvert pour enchaîner plusieurs articles.
+Aux trois premiers, chaque code reconnu ajoute la pièce au document (ou incrémente sa quantité) et affiche le nom du produit ; le scanner reste ouvert pour enchaîner plusieurs articles.
+
+Sur la **fiche produit**, le geste sert à autre chose : reprendre le code déjà imprimé sur la boîte au lieu d'en générer un. Le code lu remplit le champ, l'aperçu de l'étiquette se met à jour, et la fenêtre se referme. Deux garde-fous :
+
+- un code **déjà attribué** à un autre produit est refusé, en nommant le produit concerné — sans quoi la caisse encaisserait l'un pour l'autre ;
+- un code qui n'est **ni EAN-13 ni UPC-A** (Code 39/128 alphanumérique, EAN-8) est refusé plutôt que tronqué en chiffres qui ne correspondraient à rien. Pour ces articles, **Aléatoire** génère un code valide et **Imprimer l'étiquette** produit la vignette à coller.
 
 - Sur Chrome / Android, le décodage utilise `BarcodeDetector`, intégré au système.
 - Ailleurs (Safari iOS, Firefox, ordinateurs), ZXing est chargé à la demande — il n'entre dans le bundle que s'il sert.

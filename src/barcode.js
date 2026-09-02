@@ -43,6 +43,27 @@ export function randomEan13(prefix = DEFAULT_PREFIX) {
   return base + ean13CheckDigit(base);
 }
 
+/**
+ * Turn a scanner reading into a code the product sheet can store.
+ *
+ * A scanner hands back exactly what is printed, which is not always an EAN-13:
+ * a UPC-A label reads as 12 digits and becomes an EAN-13 by prefixing a zero —
+ * re-signing it like any other 12-digit string would name a *different*
+ * article. Anything else (alphanumeric Code 39/128, EAN-8) falls outside what
+ * this app prints and reads back, so it is refused rather than mangled into
+ * digits that match nothing.
+ *
+ * @returns {string} the 13-digit code, or "" when the reading is unusable
+ */
+export function scanToEan13(raw) {
+  const text = String(raw ?? "").trim();
+  const d = onlyDigits(text);
+  if (!d || d.length !== text.length) return "";   // lettres, tirets, symboles
+  if (d.length === 13) return isValidEan13(d) ? d : normalizeEan13(d);
+  if (d.length === 12) return isValidEan13(`0${d}`) ? `0${d}` : normalizeEan13(d);
+  return "";
+}
+
 // ---- geometry (in modules; 1 module = 1 viewBox unit) ----
 const QUIET_START = 11;          // left quiet zone, holds the first digit
 const QUIET_END = 7;             // right quiet zone

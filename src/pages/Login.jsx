@@ -26,7 +26,7 @@ const Blob = styled.div`
 `;
 
 export default function Login() {
-  const { login, register, t, lang, setLang, needsSetup, adminExists, setupError } = useApp();
+  const { login, register, t, lang, setLang, needsSetup, adminExists, setupError, branding } = useApp();
   // A fresh project has no administrator yet — open straight on the sign-up form.
   const [mode, setMode] = useState(needsSetup ? "register" : "login");
   const [error, setError] = useState("");
@@ -34,7 +34,16 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [form, setForm] = useState({ identifier: "", name: "", username: "", email: "", password: "" });
+  // Une URL de logo peut avoir été supprimée du stockage depuis : si l'image ne
+  // charge pas, l'écran retombe sur l'icône plutôt que d'afficher un cadre vide.
+  const [logoBroken, setLogoBroken] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const logo = logoBroken ? "" : branding?.logo || "";
+  const storeName = branding?.name?.trim() || t("AutoGarage Pro");
+  const tagline = branding?.description?.trim() || t("Gestion de garage automobile");
+
+  useEffect(() => { setLogoBroken(false); }, [branding?.logo]);
 
   // The administrator is created once. As soon as the project has one, the
   // sign-up form disappears for good — new staff get an account from the
@@ -96,11 +105,14 @@ export default function Login() {
             <motion.div
               initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }}
               transition={{ delay: 0.15, type: "spring", stiffness: 260, damping: 18 }}
-              className="mx-auto mb-3 flex h-16 w-16 items-center justify-center rounded-2xl bg-white/15 text-white shadow-lift backdrop-blur">
-              <Wrench size={30} />
+              className={`mx-auto mb-3 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl text-white shadow-lift backdrop-blur ${logo ? "bg-white" : "bg-white/15"}`}>
+              {logo
+                ? <img src={logo} alt={storeName} onError={() => setLogoBroken(true)}
+                    className="h-full w-full object-cover" />
+                : <Wrench size={30} />}
             </motion.div>
-            <h1 className="text-xl font-bold text-white">{t("AutoGarage Pro")}</h1>
-            <p className="mt-1 text-xs text-white/60">{t("Gestion de garage automobile")}</p>
+            <h1 className="text-xl font-bold text-white">{storeName}</h1>
+            <p className="mt-1 line-clamp-2 text-xs text-white/60">{tagline}</p>
           </div>
 
           <div className="px-8 py-7">

@@ -1,8 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   fetchDB, pushDB, resetRemoteDB, clearSnapshot, emptyDB,
-  LANG_KEY, PAGE_ACTIONS,
+  readBranding, saveBranding, LANG_KEY, PAGE_ACTIONS,
 } from "./store";
+import { fetchBranding } from "./lib/remote";
 import { supabase, createSignupClient } from "./lib/supabase";
 import { makeT } from "./i18n";
 
@@ -39,6 +40,10 @@ export function AppProvider({ children }) {
   const [adminExists, setAdminExists] = useState(true); // assume yes until told otherwise
   const [setupError, setSetupError] = useState("");
   const [lang, setLangState] = useState(() => localStorage.getItem(LANG_KEY) || "fr");
+  // Logo et nom du garage : affichés par l'écran de connexion, donc connus
+  // avant toute session. La valeur mémorisée s'affiche tout de suite, puis la
+  // base a le dernier mot si elle répond.
+  const [branding, setBranding] = useState(readBranding);
 
   const pending = useRef(null);   // newest document waiting to be written
   const timer = useRef(null);
@@ -72,6 +77,9 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     let alive = true;
+    fetchBranding()
+      .then((b) => { if (alive && b) setBranding(saveBranding(b)); })
+      .catch(() => {});
 
     supabase.auth.getSession().then(async ({ data }) => {
       if (!alive) return;
@@ -116,6 +124,12 @@ export function AppProvider({ children }) {
   }, [session, readProfile]);
 
   useEffect(() => { if (session?.user) load(); }, [session?.user?.id]);
+
+  // Le garage renommé ou dont le logo change dans « Paramètres » se retrouve
+  // sur l'écran de connexion, sans attendre une nouvelle lecture de la base.
+  useEffect(() => {
+    if (db?.settings) setBranding(saveBranding(db.settings));
+  }, [db?.settings?.logo, db?.settings?.name, db?.settings?.description]);
 
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -287,7 +301,7 @@ export function AppProvider({ children }) {
     status, loadError, saveState, reload: load,
     update, session, currentUser, currentWorker,
     login, register, logout, createWorkerAccount, changePassword,
-    lang, setLang, t, can,
+    lang, setLang, t, can, branding,
     // No administrator yet — the login screen offers to create one.
     needsSetup: !adminExists && !setupError,
     adminExists,

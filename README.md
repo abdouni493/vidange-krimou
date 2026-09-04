@@ -138,6 +138,7 @@ Vues de reporting : `v_repair_balances`, `v_sale_balances`, `v_purchase_balances
 | `has_any_perm(page, actions[])` | un bouton couvert par plusieurs droits |
 | `admin_exists()` | utilisée par l'écran de connexion, appelable sans être connecté |
 | `login_email(identifiant)` | traduit un nom d'utilisateur en email pour la connexion |
+| `garage_branding()` | logo, nom et description du garage pour l'écran de connexion, appelable sans être connecté |
 
 Le modèle retenu : **lecture** ouverte à tout membre du personnel actif (l'application charge le dossier complet en mémoire ; couper la lecture casserait les pages auxquelles l'employé *a* droit), **écriture** strictement pilotée par les permissions accordées, action par action. La paie fait exception : acomptes, absences et paiements ne sont lisibles que par un administrateur, par un employé ayant la page « Employés », ou par l'intéressé pour ses propres lignes.
 

@@ -155,6 +155,16 @@ returns text language sql stable security definer set search_path = public as $f
   limit 1;
 $fn$;
 
+-- Identite du garage affichee par l'ecran de connexion, avant toute session.
+-- La table `settings` reste fermee aux visiteurs anonymes : cette fonction
+-- n'en laisse sortir que le logo, le nom et la description.
+create or replace function public.garage_branding()
+returns jsonb language sql stable security definer set search_path = public as $fn$
+  select jsonb_build_object('logo', s.logo, 'name', s.name, 'description', s.description)
+  from public.settings s
+  where s.id = 1;
+$fn$;
+
 -- ---- creation automatique du profil a l'inscription ----------------------
 -- Le premier compte cree sur une base vierge devient administrateur.
 -- Toute inscription ulterieure est un employe, meme si le client demande
@@ -1017,6 +1027,7 @@ grant select on public.v_repair_balances, public.v_sale_balances,
 grant usage, select on all sequences in schema public to authenticated;
 grant execute on function public.admin_exists() to anon, authenticated;
 grant execute on function public.login_email(text) to anon, authenticated;
+grant execute on function public.garage_branding() to anon, authenticated;
 grant execute on function public.is_admin(), public.is_staff(),
                           public.my_permissions(), public.current_worker_id(),
                           public.has_perm(text, text), public.has_any_perm(text, text[]),

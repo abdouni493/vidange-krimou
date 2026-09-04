@@ -12,6 +12,39 @@ import { fetchAll, pushAll, resetAll } from "./lib/remote";
 
 export const LANG_KEY = "garage_lang_v1";
 
+// L'écran de connexion s'affiche avant toute session, et la RLS ne laisse rien
+// lire à un visiteur anonyme : le logo et le nom du garage sont donc gardés ici
+// à chaque chargement, pour être affichés immédiatement à la visite suivante.
+export const BRANDING_KEY = "garage_branding_v1";
+
+const cleanBranding = (s) => ({
+  logo: s?.logo || "",
+  name: s?.name || "",
+  description: s?.description || "",
+});
+
+/** Dernière identité connue du garage, ou `null` sur un poste qui n'en a jamais vu. */
+export function readBranding() {
+  try {
+    const raw = localStorage.getItem(BRANDING_KEY);
+    const b = raw ? JSON.parse(raw) : null;
+    return b && typeof b === "object" ? cleanBranding(b) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Mémorise logo + nom + description ; renvoie la forme retenue. */
+export function saveBranding(settings) {
+  const b = cleanBranding(settings);
+  try {
+    localStorage.setItem(BRANDING_KEY, JSON.stringify(b));
+  } catch {
+    /* navigation privée, quota plein — l'affichage retombe sur les valeurs par défaut */
+  }
+  return b;
+}
+
 export const uid = () =>
   Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 

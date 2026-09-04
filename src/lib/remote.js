@@ -176,6 +176,26 @@ export async function fetchAll() {
   return doc;
 }
 
+/**
+ * Identité du garage (logo, nom, description) lisible sans être connecté.
+ *
+ * La table `settings` est fermée aux visiteurs anonymes ; la fonction
+ * `garage_branding()` du schéma n'en expose que ces trois champs, pour que
+ * l'écran de connexion porte les couleurs du garage. Sur une base où le schéma
+ * n'a pas encore été rejoué la fonction n'existe pas : on renvoie `null` et
+ * l'appelant se rabat sur ce qu'il a en mémoire.
+ */
+export async function fetchBranding() {
+  const { data, error } = await supabase.rpc("garage_branding");
+  if (error || !data) return null;
+  const row = Array.isArray(data) ? data[0] : data;
+  return {
+    logo: row?.logo || "",
+    name: row?.name || "",
+    description: row?.description || "",
+  };
+}
+
 // ------------------------------------------------------------------ écriture
 
 const chunked = async (rows, run) => {

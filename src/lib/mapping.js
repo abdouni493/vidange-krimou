@@ -63,6 +63,7 @@ export const COLLECTIONS = [
       purchasePrice: "purchase_price", salePrice: "sale_price",
       qtyPrincipal: "qty_principal", qtyCurrent: "qty_current", minQty: "min_qty",
       trackExpiration: "track_expiration", expiration: "expiration",
+      discountRule: "discount_rule",
       createdAt: "created_at",
     },
   },
@@ -213,7 +214,7 @@ export const COLLECTIONS = [
 // sont des scalaires. Utile pour ne pas transformer un objet en chaîne.
 export const JSON_COLS = new Set([
   "pay", "account", "permissions", "settled_repair_ids",
-  "car", "tva", "discount", "details",
+  "car", "tva", "discount", "details", "discount_rule",
 ]);
 
 // Colonnes booléennes : PostgREST refuse une chaîne vide sur un boolean.
@@ -227,8 +228,15 @@ export const NUM_COLS = new Set([
 
 export const SETTINGS_COLS = [
   "logo", "name", "description", "email", "phone", "address",
-  "nif", "nis", "article", "rc",
+  "nif", "nis", "article", "rc", "discount",
 ];
+
+// Reglages stockes en JSON plutot qu'en texte : ils traversent la frontiere
+// tels quels, et une base qui n'a pas encore la colonne retombe sur le defaut
+// au lieu d'envoyer une chaine vide — que PostgreSQL refuserait sur un jsonb.
+export const DEFAULT_DISCOUNT = { enabled: true, mode: "amount", value: 0 };
+
+export const SETTINGS_JSON = { discount: DEFAULT_DISCOUNT };
 
 /** Ordre d'écriture : un parent est inséré avant ce qui le référence. */
 export const WRITE_ORDER = COLLECTIONS.map((c) => c.key);

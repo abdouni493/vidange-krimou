@@ -320,6 +320,9 @@ create table if not exists public.products (
   min_qty          integer not null default 0,
   track_expiration boolean not null default false,
   expiration       text,
+  -- Plafond de reduction propre a cet article, regle depuis le point de vente
+  -- par un administrateur. `{}` : l'article suit le plafond global.
+  discount_rule    jsonb not null default '{}'::jsonb,
   position         integer not null default 0,
   created_at       timestamptz not null default now()
 );
@@ -608,6 +611,9 @@ create table if not exists public.settings (
   nis         text  not null default '',
   article     text  not null default '',
   rc          text  not null default '',
+  -- Plafond de reduction applique a tout article vendu au comptoir.
+  -- { enabled, mode: 'amount'|'percent', value }
+  discount    jsonb not null default '{"enabled": true, "mode": "amount", "value": 0}'::jsonb,
   updated_at  timestamptz not null default now()
 );
 insert into public.settings (id) values (1) on conflict (id) do nothing;
@@ -842,6 +848,43 @@ create policy products_update on public.products
 
 create policy products_delete on public.products
   for delete to authenticated using (public.has_perm('stock', 'delete'));
+
+-- ---- plafonds de reduction : reglables par un administrateur seulement ---
+-- La RLS ci-dessus laisse un vendeur ecrire dans `products` (encaisser baisse
+-- `qty_current`) et un employe ayant « settings:edit » ecrire dans `settings`.
+-- Ce declencheur empeche que l'un ou l'autre releve son propre plafond par une
+-- requete faite a la main. Une ecriture qui ne touche pas au plafond passe.
+create or replace function public.guard_discount_rule()
+returns trigger language plpgsql security definer set search_path = public as $fn$
+declare
+  before_val jsonb;
+  after_val  jsonb;
+begin
+  if tg_table_name = 'products' then
+    before_val := case when tg_op = 'UPDATE' then old.discount_rule else '{}'::jsonb end;
+    after_val  := new.discount_rule;
+  else
+    before_val := case when tg_op = 'UPDATE' then old.discount end;
+    after_val  := new.discount;
+  end if;
+
+  if after_val is distinct from before_val and not public.is_admin() then
+    raise exception 'Seul un administrateur peut regler les plafonds de reduction';
+  end if;
+
+  return new;
+end;
+$fn$;
+
+drop trigger if exists trg_guard_product_discount on public.products;
+create trigger trg_guard_product_discount
+  before insert or update on public.products
+  for each row execute function public.guard_discount_rule();
+
+drop trigger if exists trg_guard_settings_discount on public.settings;
+create trigger trg_guard_settings_discount
+  before update on public.settings
+  for each row execute function public.guard_discount_rule();
 
 -- ---- ventes : creees au point de vente, gerees dans « Ventes » -----------
 alter table public.sales enable row level security;

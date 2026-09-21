@@ -12,7 +12,7 @@
 
 import { supabase } from "./supabase.js";
 import {
-  COLLECTIONS, JSON_COLS, BOOL_COLS, NUM_COLS, SETTINGS_COLS,
+  COLLECTIONS, JSON_COLS, BOOL_COLS, NUM_COLS, SETTINGS_COLS, SETTINGS_JSON,
 } from "./mapping.js";
 
 const PAGE = 1000;          // PostgREST plafonne une réponse à 1000 lignes
@@ -50,6 +50,19 @@ const writeValue = (col, v) => {
   if (NUM_COLS.has(col)) return Number(v) || 0;
   if (v === undefined || v === "") return col === "id" ? v : null;
   return v;
+};
+
+/**
+ * Valeur d'un réglage, dans les deux sens.
+ *
+ * Les réglages JSON sont fusionnés avec leur forme par défaut : une base où la
+ * colonne vient d'être ajoutée, ou un document écrit avant qu'elle existe,
+ * donnent quand même un objet complet au lieu de `null` ou d'une chaîne vide.
+ */
+const settingValue = (col, v) => {
+  const shape = SETTINGS_JSON[col];
+  if (shape) return { ...shape, ...(v && typeof v === "object" ? v : {}) };
+  return v ?? "";
 };
 
 // Le mot de passe d'un employé vit dans Supabase Auth, jamais dans une table.
@@ -164,7 +177,7 @@ export async function fetchAll() {
 
   const { data: settings } = await supabase.from("settings").select("*").eq("id", 1).maybeSingle();
   doc.settings = {};
-  for (const col of SETTINGS_COLS) doc.settings[col] = settings?.[col] ?? "";
+  for (const col of SETTINGS_COLS) doc.settings[col] = settingValue(col, settings?.[col]);
 
   const { data: counters } = await supabase.from("counters").select("*").eq("id", 1).maybeSingle();
   doc.counters = {
@@ -312,7 +325,7 @@ export async function pushAll(prevDoc, nextDoc) {
   // 3. singletons
   if (!same(prevDoc?.settings, stored?.settings)) {
     const row = { id: 1, updated_at: new Date().toISOString() };
-    for (const col of SETTINGS_COLS) row[col] = stored.settings?.[col] ?? "";
+    for (const col of SETTINGS_COLS) row[col] = settingValue(col, stored.settings?.[col]);
     const { error } = await supabase.from("settings").upsert(row, { onConflict: "id" });
     if (error) fail("Enregistrement des paramètres", error);
   }
@@ -340,7 +353,7 @@ export async function resetAll() {
   }
   await supabase.from("counters").upsert({ id: 1, purchase: 1, sale: 1 }, { onConflict: "id" });
   const blank = { id: 1, updated_at: new Date().toISOString() };
-  for (const col of SETTINGS_COLS) blank[col] = "";
+  for (const col of SETTINGS_COLS) blank[col] = settingValue(col, null);
   await supabase.from("settings").upsert(blank, { onConflict: "id" });
   return fetchAll();
 }

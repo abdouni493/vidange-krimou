@@ -3,15 +3,18 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Minus, X, Package, User, UserPlus, ShoppingBag, Percent,
   Trash2, CheckCircle2, AlertTriangle, Printer, Barcode as BarcodeIcon, ScanLine,
+  SlidersHorizontal, Lock, Info,
 } from "lucide-react";
 import { useApp } from "../context";
 import {
   uid, todayISO, fmtMoney, productPrice, applySaleToStock, clientNameOf,
   searchProducts, findProductByCode, digits,
+  cleanDiscountRule, hasOwnDiscountRule, globalDiscountRule,
+  ruleCapPerUnit, lineDiscountCap, cartDiscountCap,
 } from "../store";
 import {
   Btn, IconBtn, Field, Input, Select, SearchBox, Empty, PageHeader,
-  Badge, MoneyLine, Confirm,
+  Badge, MoneyLine, Confirm, Modal, Seg,
 } from "../components/ui";
 import BarcodeScanner from "../components/BarcodeScanner";
 import { printSale } from "./Sales";
@@ -150,9 +153,197 @@ function ProductTile({ product, inCart, onAdd }) {
   );
 }
 
+// ===== Admin only: discount ceilings =====
+//
+// « De combien peut-on baisser le prix ? » se règle une fois pour tout le
+// catalogue, puis article par article pour les exceptions. L'écran n'est ouvert
+// qu'à l'administrateur : un vendeur lit le plafond, il ne le fixe pas — et la
+// base refuse l'écriture même si la requête est forgée à la main.
+
+function RuleEditor({ rule, onChange, sample }) {
+  const { t } = useApp();
+  const r = cleanDiscountRule(rule);
+  return (
+    <div className="space-y-2.5">
+      <Seg
+        value={r.mode}
+        onChange={(mode) => onChange({ ...r, mode })}
+        options={[
+          { value: "amount", label: t("Montant fixe (DA)") },
+          { value: "percent", label: t("Pourcentage (%)") },
+        ]}
+      />
+      <div className="flex items-center gap-2">
+        <Input
+          type="number" min="0" step="any" value={r.value}
+          onChange={(e) => onChange({ ...r, value: Math.max(0, Number(e.target.value) || 0) })}
+        />
+        <span className="shrink-0 text-xs font-semibold text-slate-500">
+          {r.mode === "percent" ? "%" : "DA"}
+        </span>
+      </div>
+      <p className="text-[11px] leading-snug text-slate-500">
+        {sample > 0
+          ? `${t("Sur un prix de")} ${fmtMoney(sample)} : ${t("réduction maximale")} ${fmtMoney(ruleCapPerUnit(r, sample))} ${t("par unité vendue")}`
+          : t("Plafond appliqué à chaque unité vendue.")}
+      </p>
+    </div>
+  );
+}
+
+function DiscountSettings({ open, onClose }) {
+  const { db, update, t } = useApp();
+  const [q, setQ] = useState("");
+
+  const global = globalDiscountRule(db);
+  const tuned = db.products.filter(hasOwnDiscountRule);
+
+  // On ne propose à la recherche que les articles qui suivent encore le global :
+  // ceux déjà réglés sont juste en dessous, avec leur propre plafond.
+  const results = useMemo(() => {
+    if (!q.trim()) return [];
+    return searchProducts(db.products.filter((p) => !hasOwnDiscountRule(p)), q, 6);
+  }, [db.products, q]);
+
+  const setGlobal = (patch) =>
+    update((d) => { d.settings.discount = cleanDiscountRule({ ...globalDiscountRule(d), ...patch }); });
+
+  const setProductRule = (id, patch) =>
+    update((d) => {
+      const p = d.products.find((x) => x.id === id);
+      if (!p) return;
+      // Un article qu'on détache du global part de la valeur globale : le
+      // plafond ne bouge qu'au moment où l'administrateur le change vraiment.
+      const base = hasOwnDiscountRule(p) ? cleanDiscountRule(p.discountRule) : globalDiscountRule(d);
+      p.discountRule = cleanDiscountRule({ ...base, ...patch });
+    });
+
+  const clearProductRule = (id) =>
+    update((d) => {
+      const p = d.products.find((x) => x.id === id);
+      if (p) p.discountRule = {};   // `{}` : de nouveau aligné sur le global
+    });
+
+  return (
+    <Modal open={open} onClose={onClose} title={t("Paramètres de réduction")} width="max-w-3xl"
+      footer={<Btn icon={CheckCircle2} onClick={onClose}>{t("Terminé")}</Btn>}>
+      <div className="space-y-5">
+        <p className="flex items-start gap-2 rounded-xl bg-primary-50 px-3.5 py-2.5 text-[11.5px] leading-snug text-primary-700">
+          <Info size={13} className="mt-0.5 shrink-0" />
+          {t("Le plafond global s'applique à tous les articles. Un article réglé séparément suit son propre plafond ; tous les autres gardent le global.")}
+        </p>
+
+        {/* ---- global ---- */}
+        <section className="rounded-2xl border border-primary-200 bg-white p-4">
+          <h4 className="mb-3 flex items-center gap-2 text-[13px] font-bold text-primary-900">
+            <Percent size={14} className="text-primary-500" />
+            {t("Plafond global")}
+          </h4>
+
+          <label className="mb-3 flex cursor-pointer items-center gap-2.5">
+            <input type="checkbox" className="h-4 w-4 accent-primary-600"
+              checked={global.enabled} onChange={(e) => setGlobal({ enabled: e.target.checked })} />
+            <span className="text-[13px] font-semibold text-primary-900">
+              {t("Autoriser les réductions au comptoir")}
+            </span>
+          </label>
+
+          {global.enabled ? (
+            <RuleEditor rule={global} onChange={setGlobal} sample={0} />
+          ) : (
+            <p className="rounded-xl bg-slate-50 px-3.5 py-2.5 text-[11.5px] leading-snug text-slate-500">
+              {t("Aucune réduction ne sera possible, sauf sur les articles réglés séparément ci-dessous.")}
+            </p>
+          )}
+        </section>
+
+        {/* ---- per product ---- */}
+        <section className="rounded-2xl border border-primary-200 bg-white p-4">
+          <h4 className="mb-1 flex items-center gap-2 text-[13px] font-bold text-primary-900">
+            <Package size={14} className="text-primary-500" />
+            {t("Plafonds par article")}
+          </h4>
+          <p className="mb-3 text-[11.5px] text-slate-500">
+            {t("Cherchez un article par son nom ou son code-barres pour lui donner son propre plafond.")}
+          </p>
+
+          <SearchBox value={q} onChange={setQ}
+            placeholder={t("Rechercher par nom ou code-barres...")} />
+
+          <AnimatePresence>
+            {results.length > 0 && (
+              <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                className="mt-2 overflow-hidden rounded-xl border border-primary-100">
+                {results.map((p) => (
+                  <button key={p.id} type="button"
+                    onClick={() => { setProductRule(p.id, {}); setQ(""); }}
+                    className="flex w-full items-center justify-between gap-3 border-b border-primary-50 px-3.5 py-2.5 text-start transition-colors last:border-0 hover:bg-primary-50 cursor-pointer">
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-primary-900">{p.name}</span>
+                      <span className="block truncate text-[11px] text-slate-400">
+                        {p.barcode || p.brand || "—"}
+                      </span>
+                    </span>
+                    <span className="shrink-0 font-mono text-[12px] font-bold text-primary-700">
+                      {fmtMoney(productPrice(p))}
+                    </span>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {q.trim() && results.length === 0 && (
+            <p className="mt-2 text-[11.5px] text-slate-400">{t("Aucun produit trouvé")}</p>
+          )}
+
+          <div className="mt-4 space-y-3">
+            {tuned.length === 0 ? (
+              <p className="rounded-xl bg-slate-50 px-3.5 py-3 text-[11.5px] text-slate-500">
+                {t("Aucun article réglé séparément : tout le catalogue suit le plafond global.")}
+              </p>
+            ) : (
+              tuned.map((p) => {
+                const rule = cleanDiscountRule(p.discountRule);
+                const price = productPrice(p);
+                return (
+                  <motion.div key={p.id} layout initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-primary-100 bg-primary-50/30 p-3.5">
+                    <div className="mb-2.5 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-bold text-primary-900">{p.name}</p>
+                        <p className="text-[11px] text-slate-400">
+                          {p.barcode ? `${p.barcode} · ` : ""}{fmtMoney(price)}
+                        </p>
+                      </div>
+                      <IconBtn icon={Trash2} variant="danger" title={t("Revenir au plafond global")}
+                        onClick={() => clearProductRule(p.id)} />
+                    </div>
+                    <label className="mb-2.5 flex cursor-pointer items-center gap-2.5">
+                      <input type="checkbox" className="h-4 w-4 accent-primary-600"
+                        checked={rule.enabled}
+                        onChange={(e) => setProductRule(p.id, { enabled: e.target.checked })} />
+                      <span className="text-[12.5px] font-semibold text-primary-900">
+                        {t("Réduction autorisée sur cet article")}
+                      </span>
+                    </label>
+                    {rule.enabled && (
+                      <RuleEditor rule={rule} onChange={(next) => setProductRule(p.id, next)} sample={price} />
+                    )}
+                  </motion.div>
+                );
+              })
+            )}
+          </div>
+        </section>
+      </div>
+    </Modal>
+  );
+}
+
 // ===== Page =====
 export default function Pos() {
-  const { db, update, t, lang, can } = useApp();
+  const { db, update, t, lang, can, currentUser } = useApp();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("");
   const [lines, setLines] = useState([]);       // [{ productId, qty, price }]
@@ -164,8 +355,12 @@ export default function Pos() {
   const [done, setDone] = useState(null);       // last saved sale, for the receipt
   const [clearing, setClearing] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [tuning, setTuning] = useState(false);   // écran des plafonds, admin seul
 
   const canCreate = can("pos", "create");
+  // Régler les plafonds de réduction n'est pas une permission de page : c'est
+  // réservé à l'administrateur, et le bouton n'existe pas ailleurs.
+  const isAdmin = currentUser?.kind === "admin";
 
   // ---- catalogue ----
   // Même moteur de recherche que la fiche de réparation : insensible aux
@@ -225,7 +420,17 @@ export default function Pos() {
 
   // ---- money ----
   const subtotal = lines.reduce((s, l) => s + (Number(l.price) || 0) * (Number(l.qty) || 0), 0);
-  const discountValue = discountOn ? Math.min(subtotal, Math.max(0, Number(discount) || 0)) : 0;
+
+  // Ce que le ticket autorise à retirer : la somme des plafonds de ses lignes,
+  // chacune suivant le réglage de son article ou, à défaut, le réglage global.
+  const maxDiscount = useMemo(
+    () => Math.min(subtotal, cartDiscountCap(db, lines)),
+    [db.products, db.settings.discount, lines, subtotal]
+  );
+  const discountBlocked = maxDiscount <= 0;
+  const typedDiscount = Math.max(0, Number(discount) || 0);
+  const overLimit = discountOn && typedDiscount > maxDiscount;
+  const discountValue = discountOn ? Math.min(maxDiscount, typedDiscount) : 0;
   const total = Math.max(0, subtotal - discountValue);
   const shownPaid = paid === null ? total : Math.max(0, Number(paid) || 0);
   const rest = Math.max(0, total - shownPaid);
@@ -241,6 +446,12 @@ export default function Pos() {
     setErr("");
     if (!lines.length) { setErr(t("Ajoutez au moins un produit")); return; }
     if (requireClient) { setErr(t("Une vente avec reste à payer doit être rattachée à un client.")); return; }
+    // Dernier verrou : le plafond vaut aussi pour un montant tapé puis laissé
+    // tel quel, et il est recalculé ici sur le ticket réellement enregistré.
+    if (overLimit) {
+      setErr(`${t("Montant supérieur au plafond autorisé")} (${fmtMoney(maxDiscount)})`);
+      return;
+    }
 
     const date = todayISO();
     // Never bank more than what is owed — the surplus is change, not a payment.
@@ -285,9 +496,16 @@ export default function Pos() {
         title={t("Point de vente")}
         subtitle={t("Vendez les produits du comptoir et encaissez sur place")}
         actions={
-          lines.length > 0 && (
-            <Btn variant="danger" icon={Trash2} onClick={() => setClearing(true)}>{t("Vider le panier")}</Btn>
-          )
+          <>
+            {isAdmin && (
+              <Btn variant="soft" icon={SlidersHorizontal} onClick={() => setTuning(true)}>
+                {t("Paramètres de réduction")}
+              </Btn>
+            )}
+            {lines.length > 0 && (
+              <Btn variant="danger" icon={Trash2} onClick={() => setClearing(true)}>{t("Vider le panier")}</Btn>
+            )}
+          </>
         }
       />
 
@@ -395,6 +613,17 @@ export default function Pos() {
                         </span>
                       </div>
                     </div>
+                    {discountOn && (
+                      <p className="mt-1.5 flex items-center gap-1.5 text-[11px] text-slate-500">
+                        <Percent size={10} className="shrink-0 text-primary-400" />
+                        {t("Réduction max")} : {fmtMoney(lineDiscountCap(db, p, l.price, l.qty))}
+                        {hasOwnDiscountRule(p) && (
+                          <span className="rounded bg-primary-100 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700">
+                            {t("plafond propre")}
+                          </span>
+                        )}
+                      </p>
+                    )}
                     {l.qty >= max && (
                       <p className="mt-1.5 text-[11px] font-medium text-accent-600">{t("Stock maximum atteint")}</p>
                     )}
@@ -408,23 +637,51 @@ export default function Pos() {
               <MoneyLine label={t("Sous-total")} value={fmtMoney(subtotal)} />
 
               <div className="rounded-xl border border-primary-200 bg-white/70 p-3">
-                <label className="flex cursor-pointer items-center gap-2.5">
+                <label className={`flex items-center gap-2.5 ${
+                  discountBlocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                }`}>
                   <input type="checkbox" className="h-4 w-4 accent-primary-600" checked={discountOn}
-                    onChange={(e) => { setDiscountOn(e.target.checked); setPaid(null); }} />
-                  <Percent size={13} className="text-primary-500" />
+                    disabled={discountBlocked}
+                    onChange={(e) => { setDiscountOn(e.target.checked); setDiscount(""); setPaid(null); }} />
+                  {discountBlocked
+                    ? <Lock size={13} className="text-slate-400" />
+                    : <Percent size={13} className="text-primary-500" />}
                   <span className="text-[13px] font-semibold text-primary-900">{t("Appliquer une réduction")}</span>
                 </label>
+
+                {/* Le plafond est annoncé avant la saisie : le vendeur sait ce
+                    qu'il peut accorder au lieu de le découvrir en étant refusé. */}
+                {discountBlocked ? (
+                  lines.length > 0 && (
+                    <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-[11.5px] leading-snug text-slate-500">
+                      {t("Aucune réduction n'est autorisée sur les articles de ce ticket.")}
+                    </p>
+                  )
+                ) : (
+                  <p className="mt-2 flex items-start gap-1.5 text-[11.5px] font-semibold text-primary-700">
+                    <Info size={12} className="mt-0.5 shrink-0" />
+                    {t("Réduction maximale autorisée")} : {fmtMoney(maxDiscount)}
+                  </p>
+                )}
+
                 <AnimatePresence initial={false}>
-                  {discountOn && (
+                  {discountOn && !discountBlocked && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
                       <div className="mt-2.5">
-                        <Input type="number" min="0" max={subtotal} value={discount}
+                        <Input type="number" min="0" max={maxDiscount} value={discount}
                           placeholder="0"
                           onChange={(e) => { setDiscount(e.target.value); setPaid(null); }} />
-                        <p className="mt-1 text-[11px] text-slate-400">
-                          {t("Montant déduit du total")} — {fmtMoney(discountValue)}
-                        </p>
+                        {overLimit ? (
+                          <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-red-50 px-3 py-2 text-[11.5px] font-semibold leading-snug text-red-600" role="alert">
+                            <AlertTriangle size={13} className="mt-0.5 shrink-0" />
+                            {t("Montant supérieur au plafond autorisé")} ({fmtMoney(maxDiscount)}) — {t("corrigez le montant pour encaisser.")}
+                          </p>
+                        ) : (
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            {t("Montant déduit du total")} — {fmtMoney(discountValue)}
+                          </p>
+                        )}
                       </div>
                     </motion.div>
                   )}
@@ -464,7 +721,7 @@ export default function Pos() {
                   variant={rest > 0 ? "accent" : "primary"}
                   icon={CheckCircle2}
                   className="w-full"
-                  disabled={!lines.length || requireClient}
+                  disabled={!lines.length || requireClient || overLimit}
                   onClick={save}
                 >
                   {rest > 0 ? t("Enregistrer en dette") : t("Encaisser la vente")}
@@ -487,6 +744,8 @@ export default function Pos() {
         title={t("Scanner un produit")}
         subtitle={t("Chaque code-barres reconnu est ajouté au ticket de vente.")}
       />
+
+      {isAdmin && <DiscountSettings open={tuning} onClose={() => setTuning(false)} />}
 
       <Confirm open={clearing} onClose={() => setClearing(false)} onConfirm={reset}
         title={t("Vider le panier")} message={t("Le ticket en cours sera effacé.")}

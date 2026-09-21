@@ -38,7 +38,7 @@ export default function Settings() {
 
   const flash = (which) => { setSaved(which); setTimeout(() => setSaved(""), 2200); };
 
-  const saveStore = () => { update((d) => { d.settings = { ...store }; }); flash("store"); };
+  const saveStore = () => { update((d) => { d.settings = { ...d.settings, ...store }; }); flash("store"); };
 
   /**
    * Le nom et l'identifiant vivent dans le profil ; le mot de passe, lui, n'est

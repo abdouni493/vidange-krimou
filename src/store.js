@@ -132,6 +132,7 @@ export function emptyDB() {
   db.settings = {
     logo: "", name: "", description: "", email: "", phone: "", address: "",
     nif: "", nis: "", article: "", rc: "",
+    discount: { ...DEFAULT_DISCOUNT },
   };
   db.createdAt = new Date().toISOString();
   return db;
@@ -143,6 +144,7 @@ export function normalizeDB(db) {
   const out = { ...base, ...db };
   for (const name of COLLECTIONS) if (!Array.isArray(out[name])) out[name] = [];
   out.settings = { ...base.settings, ...(db?.settings || {}) };
+  out.settings.discount = cleanDiscountRule(out.settings.discount);
   out.counters = { ...base.counters, ...(db?.counters || {}) };
   return out;
 }
@@ -177,6 +179,73 @@ export async function resetRemoteDB() {
 export function clearSnapshot() {
   snapshot = null;
 }
+
+// ---- discount ceilings (point of sale) ----
+//
+// Un plafond dit, pour un article vendu, combien de dinars peuvent au maximum
+// être retirés de son prix de vente. Le réglage global couvre tout le
+// catalogue ; un article peut porter le sien, qui prend alors le pas — les
+// autres articles continuent de suivre le global.
+//
+//   { enabled: bool, mode: "amount" | "percent", value: number }
+//
+//   "amount"  -> `value` dinars au maximum, par article vendu
+//   "percent" -> `value` % du prix de vente au maximum, par article vendu
+
+export const DEFAULT_DISCOUNT = { enabled: true, mode: "amount", value: 0 };
+
+/** Forme sûre d'une règle, quelle que soit la façon dont elle a été saisie. */
+export const cleanDiscountRule = (r) => ({
+  enabled: r?.enabled !== false,
+  mode: r?.mode === "percent" ? "percent" : "amount",
+  value: Math.max(0, Number(r?.value) || 0),
+});
+
+/**
+ * Un article porte-t-il son propre plafond ?
+ *
+ * `{}` — la valeur par défaut en base — signifie « pas de réglage propre » :
+ * c'est ce qui distingue un article laissé au global d'un article dont
+ * l'administrateur a explicitement fixé le plafond, fût-il à zéro.
+ */
+export const hasOwnDiscountRule = (p) =>
+  !!p?.discountRule && typeof p.discountRule === "object" && p.discountRule.mode !== undefined;
+
+/** Plafond global du garage. */
+export const globalDiscountRule = (db) => cleanDiscountRule(db?.settings?.discount);
+
+/** Plafond qui s'applique réellement à cet article. */
+export const discountRuleFor = (db, product) =>
+  hasOwnDiscountRule(product) ? cleanDiscountRule(product.discountRule) : globalDiscountRule(db);
+
+/** Traduction d'une règle en dinars, pour un prix unitaire donné. */
+export const ruleCapPerUnit = (rule, unitPrice) => {
+  const r = cleanDiscountRule(rule);
+  if (!r.enabled) return 0;
+  const price = Math.max(0, Number(unitPrice) || 0);
+  const cap = r.mode === "percent" ? (price * r.value) / 100 : r.value;
+  // On ne peut pas retirer plus que le prix lui-même.
+  return Math.min(price, Math.max(0, cap));
+};
+
+/** Plafond d'une ligne de ticket : le plafond unitaire, multiplié par la quantité. */
+export const lineDiscountCap = (db, product, unitPrice, qty) =>
+  ruleCapPerUnit(discountRuleFor(db, product), unitPrice) * Math.max(0, Number(qty) || 0);
+
+/**
+ * Plafond du ticket entier : la somme de ce que chaque ligne autorise.
+ *
+ * C'est ce montant qui est annoncé au vendeur quand il coche « réduction », et
+ * c'est lui qui borne la saisie — y compris à l'enregistrement, pour qu'une
+ * valeur tapée puis désarmée ne puisse pas passer.
+ */
+export const cartDiscountCap = (db, lines = []) =>
+  Math.round(
+    lines.reduce((sum, l) => {
+      const p = db.products.find((x) => x.id === l.productId);
+      return sum + lineDiscountCap(db, p, l.price, l.qty);
+    }, 0)
+  );
 
 // ---- product search ----
 //

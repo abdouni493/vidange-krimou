@@ -17,6 +17,12 @@ export const SETUP_HINT =
 // form doesn't produce one write per keystroke.
 const SAVE_DELAY = 400;
 
+// Changes made from another account (admin or worker) are pulled in through
+// Supabase Realtime; bursts of events are merged into a single re-read. The
+// poll is a safety net for projects where Realtime is off or the socket drops.
+const SYNC_DELAY = 600;
+const POLL_EVERY = 20000;
+
 // Supabase signs in with an email address; the login box also accepts the
 // username, which this resolves through a function exposed to anonymous callers.
 async function resolveEmail(identifier) {
@@ -125,6 +131,54 @@ export function AppProvider({ children }) {
 
   useEffect(() => { if (session?.user) load(); }, [session?.user?.id]);
 
+  // ---- live sync ----
+  // Re-reads the database in the background. Never while a local edit is
+  // queued or being written: the fresh read would overwrite it on screen and
+  // reset the diff snapshot. In that case the refresh is retried after the save.
+  const syncWanted = useRef(false);
+  const syncing = useRef(false);
+  const refresh = useCallback(async () => {
+    if (syncing.current || inFlight.current || pending.current) {
+      syncWanted.current = true;
+      return;
+    }
+    syncWanted.current = false;
+    syncing.current = true;
+    try {
+      const doc = await fetchDB();
+      if (!pending.current && !inFlight.current) setDb(doc);
+      else syncWanted.current = true;
+    } catch (err) {
+      console.warn("[garage] synchronisation", err);
+    } finally {
+      syncing.current = false;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status !== "ready" || !session?.user) return;
+    let debounce = null;
+    const schedule = () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(refresh, SYNC_DELAY);
+    };
+    const channel = supabase
+      .channel(`garage-sync-${session.user.id}`)
+      .on("postgres_changes", { event: "*", schema: "public" }, schedule)
+      .subscribe();
+    const poll = setInterval(refresh, POLL_EVERY);
+    const onFocus = () => { if (document.visibilityState === "visible") refresh(); };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      clearTimeout(debounce);
+      clearInterval(poll);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      supabase.removeChannel(channel);
+    };
+  }, [status, session?.user?.id, refresh]);
+
   // Le garage renommé ou dont le logo change dans « Paramètres » se retrouve
   // sur l'écran de connexion, sans attendre une nouvelle lecture de la base.
   useEffect(() => {
@@ -153,8 +207,9 @@ export function AppProvider({ children }) {
     } finally {
       inFlight.current = false;
       if (pending.current) flush(); // changes that arrived mid-write
+      else if (syncWanted.current) refresh(); // remote changes seen meanwhile
     }
-  }, []);
+  }, [refresh]);
 
   const queueSave = useCallback((doc) => {
     pending.current = doc;

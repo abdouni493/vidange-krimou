@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Eye, Pencil, Trash2, Wallet, Printer, Receipt, User, Phone, Plus, Minus, X,
+  Eye, Pencil, Trash2, Wallet, Printer, Receipt, User, Phone, Plus, Minus, X, BadgeCheck,
 } from "lucide-react";
 import { useApp } from "../context";
 import {
@@ -101,6 +101,12 @@ export function printSale(sale, db, t, lang = "fr") {
   `, lang === "ar" ? "rtl" : "ltr");
 }
 
+// Qui a enregistré la vente — un administrateur ou un employé.
+export const sellerNameOf = (sale, t) =>
+  sale?.createdBy?.name
+    ? `${sale.createdBy.name}${sale.createdBy.kind === "admin" ? ` (${t("Admin")})` : ""}`
+    : "—";
+
 // ===== Details =====
 function ViewModal({ sale, onClose }) {
   const { db, t, lang } = useApp();
@@ -113,6 +119,7 @@ function ViewModal({ sale, onClose }) {
       <InfoRow label={t("Client")}
         value={client ? `${client.name}${client.phone ? ` · ${client.phone}` : ""}` : t("Client de passage")} />
       <InfoRow label={t("Date")} value={fmtDate(sale.date, lang)} />
+      <InfoRow label={t("Vendeur")} value={sellerNameOf(sale, t)} />
       <div className="mt-4 rounded-xl border border-primary-100 bg-surface p-4">
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-primary-400">{t("Produits vendus")}</p>
         {(sale.items || []).map((it, i) => (
@@ -307,6 +314,7 @@ export default function Sales() {
   const [preset, setPreset] = useState("all");
   const [period, setPeriod] = useState({ from: "", to: "" });
   const [status, setStatus] = useState("all");
+  const [seller, setSeller] = useState("all");
   const [view, setView] = useState("cards");
   const [viewing, setViewing] = useState(null);
   const [editing, setEditing] = useState(null);
@@ -318,6 +326,7 @@ export default function Sales() {
     const needle = q.trim().toLowerCase();
     return (db.sales || []).filter((s) => {
       if (preset !== "all" && !inRange(s.date, range.from, range.to)) return false;
+      if (seller !== "all" && (s.createdBy?.id || "none") !== seller) return false;
       if (status !== "all") {
         const { rest } = saleAmounts(s);
         if (status === "paid" && rest > 0) return false;
@@ -332,7 +341,18 @@ export default function Sales() {
       }
       return true;
     });
-  }, [db.sales, db.clients, q, preset, period, status]);
+  }, [db.sales, db.clients, q, preset, period, status, seller]);
+
+  // Vendeurs proposés au filtre : les employés, plus tout auteur déjà présent
+  // sur une vente (administrateurs, employés supprimés depuis).
+  const sellers = useMemo(() => {
+    const map = new Map();
+    for (const w of db.workers || []) map.set(w.id, w.fullName || w.name || "?");
+    for (const s of db.sales || []) {
+      if (s.createdBy?.id && !map.has(s.createdBy.id)) map.set(s.createdBy.id, sellerNameOf(s, t));
+    }
+    return [...map].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  }, [db.workers, db.sales, t]);
 
   const totals = useMemo(() => list.reduce((acc, s) => {
     const { total, paid, rest } = saleAmounts(s);
@@ -379,6 +399,13 @@ export default function Sales() {
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="w-full sm:w-72">
           <SearchBox value={q} onChange={setQ} placeholder={t("Rechercher client (nom ou téléphone)...")} />
+        </div>
+        <div className="w-52">
+          <Select value={seller} onChange={(e) => setSeller(e.target.value)} aria-label={t("Vendeur")}>
+            <option value="all">{t("Tous les vendeurs")}</option>
+            {sellers.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
+            <option value="none">{t("Vendeur inconnu")}</option>
+          </Select>
         </div>
         <Seg value={status} onChange={setStatus} options={[
           { value: "all", label: t("Tous") },
@@ -427,6 +454,9 @@ export default function Sales() {
                 <div className="mb-1 flex items-center gap-2 text-[13px] text-slate-600">
                   <User size={13} className="text-primary-400" /> {client?.name || t("Client de passage")}
                 </div>
+                <div className="mb-1 flex items-center gap-2 text-[12px] text-slate-500">
+                  <BadgeCheck size={13} className="text-primary-400" /> {t("Vendeur")} : {sellerNameOf(s, t)}
+                </div>
                 {client?.phone && (
                   <p className="mb-2 flex items-center gap-1.5 text-[11px] text-slate-400"><Phone size={11} /> {client.phone}</p>
                 )}
@@ -449,7 +479,7 @@ export default function Sales() {
           <table className="w-full min-w-[820px]">
             <thead className="thead bg-primary-50/60">
               <tr>
-                <th>{t("Référence")}</th><th>{t("Client")}</th><th>{t("Date")}</th>
+                <th>{t("Référence")}</th><th>{t("Client")}</th><th>{t("Vendeur")}</th><th>{t("Date")}</th>
                 <th>{t("Articles")}</th><th>{t("Total")}</th><th>{t("Payé")}</th><th>{t("Reste")}</th><th>{t("Actions")}</th>
               </tr>
             </thead>
@@ -460,6 +490,7 @@ export default function Sales() {
                   <tr key={s.id} className="trow transition-colors hover:bg-primary-50/40">
                     <td className="font-mono font-bold text-primary-900">{s.ref}</td>
                     <td>{clientNameOf(db, s.clientId, t)}</td>
+                    <td className="text-slate-500">{sellerNameOf(s, t)}</td>
                     <td className="text-slate-400">{fmtDate(s.date, lang)}</td>
                     <td className="font-mono">{(s.items || []).length}</td>
                     <td className="font-mono">{fmtMoney(total)}</td>

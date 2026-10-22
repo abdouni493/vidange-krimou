@@ -55,6 +55,9 @@ const thenable = (value) => ({ then: (res) => Promise.resolve(value).then(res) }
 const recorder = (table) => ({
   upsert: (rows, opts) => { ops.push({ op: "upsert", table, rows, opts }); return thenable({ error: null }); },
   insert: (rows) => { ops.push({ op: "insert", table, rows }); return thenable({ error: null }); },
+  update: (row) => ({
+    eq: (col, val) => { ops.push({ op: "update", table, rows: [{ ...row, [col]: val }] }); return thenable({ error: null }); },
+  }),
   delete: () => ({
     in: (col, ids) => { ops.push({ op: "delete.in", table, col, ids }); return thenable({ error: null }); },
     eq: (col, val) => { ops.push({ op: "delete.eq", table, col, val }); return thenable({ error: null }); },
@@ -97,14 +100,19 @@ next.products[0].qtyCurrent = 8; // la pièce sort du stock
 ops.length = 0;
 const stored1 = await pushAll(prev, next);
 
-const repairUpserts = ops.filter((o) => o.op === "upsert" && o.table === "repairs");
+const repairUpserts = ops.filter((o) => o.op === "insert" && o.table === "repairs");
 check("une seule fiche réparation écrite",
   repairUpserts.length === 1 && repairUpserts[0].rows.length === 1);
 check("c'est bien la nouvelle", repairUpserts[0]?.rows[0]?.id === "r2");
 check("la fiche existante n'est pas renumérotée", !JSON.stringify(repairUpserts).includes('"r1"'));
 check("seul le produit dont le stock bouge est écrit",
-  ops.filter((o) => o.op === "upsert" && o.table === "products")
+  ops.filter((o) => o.table === "products")
      .flatMap((o) => o.rows.map((r) => r.id)).join() === "p1");
+// La RLS évalue la policy INSERT sur un upsert : un vendeur sans droit de
+// création sur le stock serait refusé alors qu'il ne fait que baisser `qty_current`.
+check("un produit existant est mis à jour, jamais upserté",
+  ops.some((o) => o.op === "update" && o.table === "products") &&
+  !ops.some((o) => o.op !== "update" && o.table === "products"));
 check("les clients inchangés ne sont pas réécrits", !ops.some((o) => o.table === "clients"));
 check("les services inchangés ne sont pas réécrits", !ops.some((o) => o.table === "services"));
 
@@ -127,7 +135,7 @@ check("la fiche supprimée part par son identifiant",
 check("le compteur de ventes est enregistré",
   ops.some((o) => o.op === "upsert" && o.table === "counters" && o.rows.sale === 2));
 check("supprimer une fiche n'en réécrit aucune autre",
-  !ops.some((o) => o.op === "upsert" && o.table === "repairs"));
+  !ops.some((o) => ["upsert", "insert", "update"].includes(o.op) && o.table === "repairs"));
 
 section("A3. Le mot de passe d'un employé ne part jamais en base");
 const next3 = blank();
@@ -142,7 +150,7 @@ next3.workers = [{
 
 ops.length = 0;
 const stored3 = await pushAll(blank(), next3);
-const workerRow = ops.find((o) => o.op === "upsert" && o.table === "workers")?.rows[0];
+const workerRow = ops.find((o) => o.op === "insert" && o.table === "workers")?.rows[0];
 check("la fiche employé est écrite", !!workerRow);
 check("le mot de passe est retiré du compte", workerRow && !("password" in workerRow.account));
 check("les permissions partent en JSON", workerRow?.permissions?.pos?.includes("create"));
@@ -155,14 +163,16 @@ next4.sales = [{
   items: [{ productId: "p1", name: "Filtre", qty: 1, price: 900 }],
   subtotal: 900, discount: { enabled: false, amount: 0 }, total: 900, note: "",
   payments: [{ id: "sp1", amount: 900, date: "2026-02-02" }], createdAt: "2026-02-02",
+  createdBy: { id: "w1", name: "Karim", kind: "worker" },
 }];
 
 ops.length = 0;
 await pushAll(stored3, next4);
-const saleRow = ops.find((o) => o.op === "upsert" && o.table === "sales")?.rows[0];
+const saleRow = ops.find((o) => o.op === "insert" && o.table === "sales")?.rows[0];
 check("la vente est écrite", saleRow?.id === "v1");
 check("un client de passage devient NULL, pas une chaîne vide", saleRow?.client_id === null);
 check("la remise part en JSON", saleRow?.discount?.enabled === false);
+check("l'auteur de la vente voyage dans la colonne discount", saleRow?.discount?.by?.name === "Karim");
 check("les lignes de vente sont insérées",
   ops.some((o) => o.op === "insert" && o.table === "sale_items" && o.rows[0].name === "Filtre"));
 
@@ -202,6 +212,12 @@ const query = (table) => {
       return thenable({ error: null });
     },
     insert: (rows) => { rowsOf(table).push(...[].concat(rows).map((r) => ({ ...r }))); return thenable({ error: null }); },
+    update: (patch) => ({
+      eq: (col, val) => {
+        tables.set(table, rowsOf(table).map((r) => (r[col] === val ? { ...r, ...patch } : r)));
+        return thenable({ error: null });
+      },
+    }),
     delete: () => ({
       in: (col, ids) => { tables.set(table, rowsOf(table).filter((r) => !ids.includes(r[col]))); return thenable({ error: null }); },
       eq: (col, val) => { tables.set(table, rowsOf(table).filter((r) => r[col] !== val)); return thenable({ error: null }); },
@@ -243,7 +259,7 @@ compare("clients", (c) => [c.id, c.name, c.phone, c.address, c.createdAt]);
 compare("products", (p) => [p.id, p.name, p.brand, p.barcode, p.qtyCurrent, p.salePrice, p.trackExpiration]);
 compare("services", (s) => [s.id, s.name, s.description, s.price]);
 compare("workers", (w) => [w.id, w.fullName, w.userId, w.pay, w.permissions]);
-compare("sales", (s) => [s.id, s.ref, s.total, s.items, s.payments, s.discount]);
+compare("sales", (s) => [s.id, s.ref, s.total, s.items, s.payments, s.discount, s.createdBy]);
 compare("repairs", (r) => [r.id, r.type, r.status, r.car, r.tva, r.total, r.services, r.products, r.workers, r.payments]);
 
 check("le nom du garage revient", roundTrip.settings.name === "Garage Krimou");
@@ -287,7 +303,7 @@ section("B3. Une sauvegarde qui suit un rechargement n'écrit rien");
 ops.length = 0;
 supabase.from = (table) => {
   const q = query(table);
-  return { ...q, upsert: recorder(table).upsert, insert: recorder(table).insert };
+  return { ...q, upsert: recorder(table).upsert, insert: recorder(table).insert, update: recorder(table).update };
 };
 await pushAll(reloaded2, structuredClone(reloaded2));
 check("aucune écriture inutile", ops.length === 0, JSON.stringify(ops.map((o) => `${o.op} ${o.table}`)));

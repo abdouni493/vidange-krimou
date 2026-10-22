@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Minus, X, Package, User, UserPlus, ShoppingBag, Percent,
   Trash2, CheckCircle2, AlertTriangle, Printer, Barcode as BarcodeIcon, ScanLine,
-  SlidersHorizontal, Lock, Info,
+  SlidersHorizontal, Lock, Info, Star, Flame,
 } from "lucide-react";
 import { useApp } from "../context";
 import {
@@ -120,11 +120,12 @@ function ClientPanel({ clientId, setClientId, requireClient }) {
 }
 
 // ===== One product tile in the counter grid =====
-function ProductTile({ product, inCart, onAdd }) {
+function ProductTile({ product, inCart, onAdd, favorite, onToggleFavorite }) {
   const { t } = useApp();
   const stock = Number(product.qtyCurrent) || 0;
   const out = stock <= 0;
   return (
+    <div className="relative">
     <motion.button
       type="button"
       layout
@@ -150,8 +151,27 @@ function ProductTile({ product, inCart, onAdd }) {
       </p>
       <p className="mt-2 font-mono text-sm font-extrabold text-primary-700">{fmtMoney(productPrice(product))}</p>
     </motion.button>
+    <button type="button" onClick={() => onToggleFavorite(product.id)}
+      title={favorite ? t("Retirer des favoris") : t("Ajouter aux favoris")}
+      aria-pressed={favorite}
+      className={`absolute bottom-2.5 end-2.5 cursor-pointer rounded-lg p-1.5 transition-colors ${
+        favorite ? "text-amber-500 hover:bg-amber-50" : "text-slate-300 hover:bg-primary-50 hover:text-amber-400"
+      }`}>
+      <Star size={15} fill={favorite ? "currentColor" : "none"} />
+    </button>
+    </div>
   );
 }
+
+// Favoris du point de vente : propres à chaque utilisateur, gardés sur ce poste.
+const favKey = (userId) => `garage.pos.favorites.${userId || "anon"}`;
+const readFavorites = (userId) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(favKey(userId)) || "[]");
+    return Array.isArray(v) ? v : [];
+  } catch { return []; }
+};
+const POPULAR_COUNT = 12;
 
 // ===== Admin only: discount ceilings =====
 //
@@ -356,6 +376,16 @@ export default function Pos() {
   const [clearing, setClearing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [tuning, setTuning] = useState(false);   // écran des plafonds, admin seul
+  const [showAll, setShowAll] = useState(false);  // catalogue complet au lieu des populaires
+  const favUser = currentUser?.userId || currentUser?.id;
+  const [favorites, setFavorites] = useState(() => readFavorites(favUser));
+  useEffect(() => { setFavorites(readFavorites(favUser)); }, [favUser]);
+  const toggleFavorite = (id) =>
+    setFavorites((fs) => {
+      const next = fs.includes(id) ? fs.filter((x) => x !== id) : [...fs, id];
+      try { localStorage.setItem(favKey(favUser), JSON.stringify(next)); } catch { /* poste sans stockage */ }
+      return next;
+    });
 
   const canCreate = can("pos", "create");
   // Régler les plafonds de réduction n'est pas une permission de page : c'est
@@ -369,6 +399,32 @@ export default function Pos() {
     const inCategory = cat ? db.products.filter((p) => p.categoryId === cat) : db.products;
     return searchProducts(inCategory, q);
   }, [db.products, q, cat]);
+
+  // Quantités vendues par article, toutes ventes confondues.
+  const soldQty = useMemo(() => {
+    const m = new Map();
+    for (const s of db.sales || []) {
+      for (const it of s.items || []) m.set(it.productId, (m.get(it.productId) || 0) + (Number(it.qty) || 0));
+    }
+    return m;
+  }, [db.sales]);
+
+  // Sans recherche ni catégorie, l'écran ne montre que les favoris puis les
+  // 12 articles les plus vendus : le comptoir reste lisible même avec un
+  // gros catalogue. La recherche, elle, porte toujours sur tout le stock.
+  const browsing = !q.trim() && !cat && !showAll;
+  const shown = useMemo(() => {
+    const favSet = new Set(favorites);
+    const favs = products.filter((p) => favSet.has(p.id));
+    const rest = products.filter((p) => !favSet.has(p.id));
+    if (!browsing) return [...favs, ...rest];
+    const popular = rest
+      .map((p, i) => ({ p, i, n: soldQty.get(p.id) || 0 }))
+      .sort((a, b) => b.n - a.n || a.i - b.i)
+      .slice(0, POPULAR_COUNT)
+      .map((x) => x.p);
+    return [...favs, ...popular];
+  }, [products, favorites, browsing, soldQty]);
 
   // ---- cart ----
   const stockOf = (id) => Number(db.products.find((p) => p.id === id)?.qtyCurrent) || 0;
@@ -472,6 +528,9 @@ export default function Pos() {
       discount: { enabled: discountOn, amount: discountValue },
       total,
       payments: banked > 0 ? [{ id: uid(), amount: banked, date }] : [],
+      createdBy: currentUser
+        ? { id: currentUser.id, name: currentUser.name || currentUser.username || "", kind: currentUser.kind }
+        : null,
       createdAt: date,
     };
 
@@ -525,48 +584,17 @@ export default function Pos() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_380px]">
-        {/* ===== Counter ===== */}
-        <div>
-          <div className="card mb-4 flex flex-wrap items-center gap-3 p-4">
-            <div className="min-w-[220px] flex-1">
-              <SearchBox value={q} onChange={setQ} onKeyDown={onSearchKey}
-                placeholder={t("Rechercher par nom, description ou code-barres...")} />
-            </div>
-            <Btn variant="soft" icon={ScanLine} onClick={() => setScanning(true)}>
-              {t("Scanner")}
-            </Btn>
-            <div className="w-52">
-              <Select value={cat} onChange={(e) => setCat(e.target.value)}>
-                <option value="">{t("Toutes les catégories")}</option>
-                {db.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </div>
-            <Badge className="ms-auto">{products.length} {t("Produits").toLowerCase()}</Badge>
-          </div>
-
-          {products.length === 0 ? (
-            <Empty text={t("Aucun produit trouvé")} />
-          ) : (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
-              {products.map((p) => (
-                <ProductTile key={p.id} product={p}
-                  inCart={lines.some((l) => l.productId === p.id)}
-                  onAdd={addProduct} />
-              ))}
-            </div>
-          )}
-        </div>
-
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[400px_minmax(0,1fr)]">
         {/* ===== Ticket ===== */}
-        <div className="xl:sticky xl:top-24 xl:h-fit">
-          <div className="card flex flex-col overflow-hidden">
+        <div className="xl:sticky xl:top-24 xl:flex xl:h-[calc(100vh-7.5rem)] xl:flex-col">
+          <div className="card flex flex-col overflow-hidden xl:min-h-0 xl:flex-1">
             <div className="flex items-center gap-2.5 border-b border-primary-100/70 bg-gradient-to-r from-primary-50/80 to-white px-4 py-3">
               <div className="rounded-lg grad-primary p-1.5 text-white"><ShoppingBag size={15} /></div>
               <h3 className="text-sm font-bold text-primary-900">{t("Ticket de vente")}</h3>
               <Badge className="ms-auto">{lines.length}</Badge>
             </div>
 
+            <div className="min-h-0 flex-1 overflow-y-auto">
             {/* client */}
             <div className="border-b border-primary-50 px-4 py-3.5">
               <p className="label flex items-center gap-1.5"><User size={12} /> {t("Client")}</p>
@@ -574,7 +602,7 @@ export default function Pos() {
             </div>
 
             {/* lines */}
-            <div className="max-h-[320px] space-y-2 overflow-y-auto px-4 py-3.5">
+            <div className="space-y-2 px-4 py-3.5">
               {lines.length === 0 && (
                 <p className="py-8 text-center text-xs text-slate-400">
                   {t("Cliquez sur un produit pour l'ajouter au ticket")}
@@ -632,10 +660,8 @@ export default function Pos() {
               })}
             </div>
 
-            {/* totals */}
-            <div className="space-y-3 border-t border-primary-100 bg-primary-50/40 px-4 py-4">
-              <MoneyLine label={t("Sous-total")} value={fmtMoney(subtotal)} />
-
+            {/* discount — défile avec le ticket */}
+            <div className="border-t border-primary-50 px-4 py-3">
               <div className="rounded-xl border border-primary-200 bg-white/70 p-3">
                 <label className={`flex items-center gap-2.5 ${
                   discountBlocked ? "cursor-not-allowed opacity-60" : "cursor-pointer"
@@ -687,18 +713,29 @@ export default function Pos() {
                   )}
                 </AnimatePresence>
               </div>
+            </div>
+            </div>
 
-              <div className="rounded-xl border-2 border-primary-300 bg-white p-3">
+            {/* totals — toujours visibles, le bouton d'encaissement aussi */}
+            <div className="shrink-0 space-y-2.5 border-t border-primary-100 bg-primary-50/40 px-4 py-3">
+              <MoneyLine label={t("Sous-total")} value={fmtMoney(subtotal)} />
+              {discountValue > 0 && (
+                <MoneyLine label={t("Réduction")} value={`- ${fmtMoney(discountValue)}`} color="text-accent-600" />
+              )}
+              <div className="rounded-xl border-2 border-primary-300 bg-white px-3 py-2">
                 <MoneyLine label={t("Total à payer")} value={fmtMoney(total)} big />
               </div>
 
-              <Field label={t("Le client paie")}>
-                <Input type="number" min="0" step="any" value={shownPaid}
-                  onChange={(e) => setPaid(e.target.value === "" ? 0 : Number(e.target.value))} />
-              </Field>
-
-              <MoneyLine label={t("Reste")} value={fmtMoney(rest)}
-                color={rest > 0 ? "text-red-500" : "text-emerald-600"} big />
+              <div className="grid grid-cols-2 items-end gap-3">
+                <Field label={t("Le client paie")}>
+                  <Input type="number" min="0" step="any" value={shownPaid}
+                    onChange={(e) => setPaid(e.target.value === "" ? 0 : Number(e.target.value))} />
+                </Field>
+                <div className="pb-2.5">
+                  <MoneyLine label={t("Reste")} value={fmtMoney(rest)}
+                    color={rest > 0 ? "text-red-500" : "text-emerald-600"} />
+                </div>
+              </div>
               {change > 0 && (
                 <MoneyLine label={t("Monnaie à rendre")} value={fmtMoney(change)} color="text-sky-600" />
               )}
@@ -730,10 +767,55 @@ export default function Pos() {
             </div>
           </div>
 
-          <p className="mt-3 flex items-center justify-center gap-1.5 text-center text-[11px] text-slate-400">
+          <p className="mt-2 flex shrink-0 items-center justify-center gap-1.5 text-center text-[11px] text-slate-400">
             <BarcodeIcon size={12} className="shrink-0" />
             {t("Astuce : scannez avec la caméra, une douchette, ou tapez le code puis Entrée")}
           </p>
+        </div>
+
+        {/* ===== Counter ===== */}
+        <div className="min-w-0">
+          <div className="card mb-4 flex flex-wrap items-center gap-3 p-4">
+            <div className="min-w-[220px] flex-1">
+              <SearchBox value={q} onChange={setQ} onKeyDown={onSearchKey}
+                placeholder={t("Rechercher par nom, description ou code-barres...")} />
+            </div>
+            <Btn variant="soft" icon={ScanLine} onClick={() => setScanning(true)}>
+              {t("Scanner")}
+            </Btn>
+            <div className="w-52">
+              <Select value={cat} onChange={(e) => setCat(e.target.value)}>
+                <option value="">{t("Toutes les catégories")}</option>
+                {db.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </Select>
+            </div>
+            <Seg value={showAll ? "all" : "popular"} onChange={(v) => setShowAll(v === "all")} options={[
+              { value: "popular", label: t("Populaires") },
+              { value: "all", label: t("Tout le catalogue") },
+            ]} />
+            <Badge className="ms-auto">{shown.length} / {products.length}</Badge>
+          </div>
+
+          {browsing && (
+            <p className="mb-3 flex items-center gap-1.5 text-[11.5px] text-slate-500">
+              <Flame size={13} className="text-accent-500" />
+              {t("Vos favoris, puis les 12 articles les plus vendus. Touchez l'étoile pour épingler un article en tête.")}
+            </p>
+          )}
+
+          {shown.length === 0 ? (
+            <Empty text={t("Aucun produit trouvé")} />
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 2xl:grid-cols-4">
+              {shown.map((p) => (
+                <ProductTile key={p.id} product={p}
+                  inCart={lines.some((l) => l.productId === p.id)}
+                  favorite={favorites.includes(p.id)}
+                  onToggleFavorite={toggleFavorite}
+                  onAdd={addProduct} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 

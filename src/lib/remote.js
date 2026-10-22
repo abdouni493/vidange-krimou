@@ -81,6 +81,14 @@ const fromRow = (spec, row) => {
   for (const [field, col] of Object.entries(spec.cols)) {
     rec[field] = readValue(col, row[col]);
   }
+  // Champ rangé à l'intérieur d'une colonne JSON existante (voir `packed`).
+  if (spec.packed) {
+    const { field, col, key } = spec.packed;
+    const hostField = Object.keys(spec.cols).find((f) => spec.cols[f] === col);
+    const { [key]: value, ...rest } = rec[hostField] || {};
+    rec[hostField] = rest;
+    rec[field] = value ?? null;
+  }
   for (const child of spec.children || []) rec[child.field] = [];
   return rec;
 };
@@ -91,6 +99,10 @@ const toRow = (spec, rec) => {
     let v = rec[field];
     if (col === "account") v = scrubAccount(v);
     row[col] = writeValue(col, v);
+  }
+  if (spec.packed && rec[spec.packed.field]) {
+    const { field, col, key } = spec.packed;
+    row[col] = { ...(row[col] || {}), [key]: rec[field] };
   }
   return row;
 };
@@ -304,11 +316,24 @@ export async function pushAll(prevDoc, nextDoc) {
   for (const spec of COLLECTIONS) {
     const { upserts, childReplacements } = diffs.get(spec.key);
 
-    if (upserts.length) {
-      await chunked(upserts, async (rows) => {
-        const { error } = await supabase.from(spec.table).upsert(rows, { onConflict: "id" });
+    // Une fiche déjà en base est mise à jour, une nouvelle est insérée — jamais
+    // d'upsert : `INSERT … ON CONFLICT` fait évaluer la policy INSERT même pour
+    // une simple mise à jour, ce qui refusait à un vendeur de baisser le stock
+    // d'un produit qu'il n'a pas le droit de créer.
+    const known = new Set((prevDoc?.[spec.key] || []).map((r) => r.id));
+    const inserts = upserts.filter((r) => !known.has(r.id));
+    const updates = upserts.filter((r) => known.has(r.id));
+
+    if (inserts.length) {
+      await chunked(inserts, async (rows) => {
+        const { error } = await supabase.from(spec.table).insert(rows);
         if (error) fail(`Enregistrement de « ${spec.table} »`, error);
       });
+    }
+    for (const row of updates) {
+      const { id, ...patch } = row;
+      const { error } = await supabase.from(spec.table).update(patch).eq("id", id);
+      if (error) fail(`Enregistrement de « ${spec.table} »`, error);
     }
 
     // Les lignes d'un document sont remplacées en bloc : elles n'ont pas

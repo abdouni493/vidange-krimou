@@ -229,6 +229,15 @@ export const AR = {
   "Ajouté le": "أضيف في",
   "Toutes les marques": "كل الماركات",
   "Toutes les catégories": "كل الفئات",
+  "Vendeur": "البائع",
+  "Admin": "المدير",
+  "Tous les vendeurs": "كل البائعين",
+  "Vendeur inconnu": "بائع غير معروف",
+  "Populaires": "الأكثر مبيعاً",
+  "Tout le catalogue": "كل المنتجات",
+  "Ajouter aux favoris": "إضافة إلى المفضلة",
+  "Retirer des favoris": "إزالة من المفضلة",
+  "Vos favoris, puis les 12 articles les plus vendus. Touchez l'étoile pour épingler un article en tête.": "مفضلتك، ثم أكثر 12 منتجاً مبيعاً. اضغط على النجمة لتثبيت منتج في الأعلى.",
   "Aucun produit trouvé": "لم يتم العثور على منتجات",
 
   // ===== Purchases =====

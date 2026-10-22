@@ -162,6 +162,9 @@ export const COLLECTIONS = [
       subtotal: "subtotal", discount: "discount", total: "total",
       note: "note", createdAt: "created_at",
     },
+    // L'auteur de la vente ({ id, name, kind }) voyage dans la colonne JSON
+    // `discount` sous la clé `by` : aucune colonne à ajouter côté Supabase.
+    packed: { field: "createdBy", col: "discount", key: "by" },
     children: [
       {
         field: "items", table: "sale_items", parent: "sale_id",

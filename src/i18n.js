@@ -151,6 +151,7 @@ export const AR = {
   "Paiement": "الدفع",
   "Montant payé": "المبلغ المدفوع",
   "Le client paie": "يدفع العميل",
+  "Date de vente": "تاريخ البيع",
   "Total (modifiable)": "المجموع (قابل للتعديل)",
   "Créer le RDV": "إنشاء الموعد",
   "Créer la réparation": "إنشاء التصليح",

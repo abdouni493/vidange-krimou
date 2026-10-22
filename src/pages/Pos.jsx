@@ -371,6 +371,7 @@ export default function Pos() {
   const [discountOn, setDiscountOn] = useState(false);
   const [discount, setDiscount] = useState("");
   const [paid, setPaid] = useState(null);       // null => "pays the whole thing"
+  const [saleDate, setSaleDate] = useState(todayISO); // modifiable par l'admin seul
   const [err, setErr] = useState("");
   const [done, setDone] = useState(null);       // last saved sale, for the receipt
   const [clearing, setClearing] = useState(false);
@@ -495,7 +496,7 @@ export default function Pos() {
 
   const reset = () => {
     setLines([]); setClientId(""); setDiscountOn(false); setDiscount("");
-    setPaid(null); setErr(""); setQ("");
+    setPaid(null); setErr(""); setQ(""); setSaleDate(todayISO());
   };
 
   const save = () => {
@@ -509,7 +510,8 @@ export default function Pos() {
       return;
     }
 
-    const date = todayISO();
+    // Seul l'administrateur peut antidater une vente ; un employé vend toujours à la date du jour.
+    const date = isAdmin && saleDate ? saleDate : todayISO();
     // Never bank more than what is owed — the surplus is change, not a payment.
     const banked = Math.min(shownPaid, total);
     const seq = Number(db.counters?.sale) || 1;
@@ -725,6 +727,13 @@ export default function Pos() {
               <div className="rounded-xl border-2 border-primary-300 bg-white px-3 py-2">
                 <MoneyLine label={t("Total à payer")} value={fmtMoney(total)} big />
               </div>
+
+              {isAdmin && (
+                <Field label={t("Date de vente")}>
+                  <Input type="date" value={saleDate} max={todayISO()}
+                    onChange={(e) => setSaleDate(e.target.value)} />
+                </Field>
+              )}
 
               <div className="grid grid-cols-2 items-end gap-3">
                 <Field label={t("Le client paie")}>

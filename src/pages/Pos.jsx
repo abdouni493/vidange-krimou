@@ -584,9 +584,9 @@ export default function Pos() {
         )}
       </AnimatePresence>
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[400px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
         {/* ===== Ticket ===== */}
-        <div className="xl:sticky xl:top-24 xl:flex xl:h-[calc(100vh-7.5rem)] xl:flex-col">
+        <div className="xl:order-2 xl:sticky xl:top-24 xl:flex xl:h-[calc(100vh-7.5rem)] xl:flex-col">
           <div className="card flex flex-col overflow-hidden xl:min-h-0 xl:flex-1">
             <div className="flex items-center gap-2.5 border-b border-primary-100/70 bg-gradient-to-r from-primary-50/80 to-white px-4 py-3">
               <div className="rounded-lg grad-primary p-1.5 text-white"><ShoppingBag size={15} /></div>

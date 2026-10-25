@@ -620,6 +620,17 @@ export const AR = {
   "Envoi…": "جاري الإرسال…",
   "Configuration incomplète": "الإعداد غير مكتمل",
   "Base non initialisée : exécutez supabase/schema.sql dans le SQL Editor du projet Supabase.": "قاعدة البيانات غير مهيأة: نفذ ملف supabase/schema.sql في محرر SQL بمشروع Supabase.",
+  // ===== Stock alerts =====
+  "Produits presque épuisés": "منتجات على وشك النفاد",
+  "Produits bientôt expirés": "منتجات قريبة الانتهاء",
+  "Presque épuisés": "على وشك النفاد",
+  "Bientôt expirés": "قريبة الانتهاء",
+  "produit(s) presque épuisé(s)": "منتج(ات) على وشك النفاد",
+  "produit(s) expiré(s) ou bientôt expiré(s)": "منتج(ات) منتهية أو قريبة الانتهاء",
+  "Voir la liste": "عرض القائمة",
+  "Jours restants": "الأيام المتبقية",
+  "Expiré": "منتهي الصلاحية",
+  "j": "يوم",
 };
 
 export function makeT(lang) {

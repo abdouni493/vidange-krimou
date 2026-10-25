@@ -12,6 +12,7 @@ import {
   Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
 } from "../components/ui";
 import BarcodeScanner from "../components/BarcodeScanner";
+import StockAlerts from "../components/StockAlerts";
 
 /**
  * Shared product form — also embedded in the Purchases interface.
@@ -30,6 +31,12 @@ export function ProductForm({ editing, onClose, onCreated }) {
     barcode: editing?.barcode || "",
     qtyCurrent: editing?.qtyCurrent ?? 0,
     trackExpiration: !!editing?.trackExpiration,
+    // Commercial data normally set by purchases — editable here to correct a product
+    qtyPrincipal: editing?.qtyPrincipal ?? 0,
+    purchasePrice: editing?.purchasePrice ?? 0,
+    salePrice: editing?.salePrice ?? 0,
+    minQty: editing?.minQty ?? 0,
+    expiration: editing?.expiration || "",
   }));
   const [newCat, setNewCat] = useState(null); // null | string being typed
   const [copies, setCopies] = useState(1);
@@ -96,9 +103,12 @@ export function ProductForm({ editing, onClose, onCreated }) {
         d.products[i] = {
           ...d.products[i], ...shared,
           qtyCurrent: qty,
-          qtyPrincipal: Math.max(Number(d.products[i].qtyPrincipal) || 0, qty),
+          qtyPrincipal: Math.max(Number(form.qtyPrincipal) || 0, qty),
+          purchasePrice: Math.max(0, Number(form.purchasePrice) || 0),
+          salePrice: Math.max(0, Number(form.salePrice) || 0),
+          minQty: Math.max(0, Number(form.minQty) || 0),
           // Turning the tracking off drops a stale date instead of keeping it hidden
-          expiration: form.trackExpiration ? d.products[i].expiration || "" : "",
+          expiration: form.trackExpiration ? form.expiration || "" : "",
         };
       });
     } else {
@@ -145,9 +155,25 @@ export function ProductForm({ editing, onClose, onCreated }) {
           )}
         </Field>
 
-        <Field label={t("Quantité en stock")}>
+        <Field label={editing ? t("Quantité actuelle") : t("Quantité en stock")}>
           <Input type="number" min="0" value={form.qtyCurrent} onChange={set("qtyCurrent")} />
         </Field>
+        {editing && (
+          <>
+            <Field label={t("Quantité principale")}>
+              <Input type="number" min="0" value={form.qtyPrincipal} onChange={set("qtyPrincipal")} />
+            </Field>
+            <Field label={t("Quantité minimale (alerte)")}>
+              <Input type="number" min="0" value={form.minQty} onChange={set("minQty")} />
+            </Field>
+            <Field label={t("Prix d'achat")}>
+              <Input type="number" min="0" value={form.purchasePrice} onChange={set("purchasePrice")} />
+            </Field>
+            <Field label={t("Prix de vente")}>
+              <Input type="number" min="0" value={form.salePrice} onChange={set("salePrice")} />
+            </Field>
+          </>
+        )}
 
         {/* Expiry is only a yes/no here — the date itself is captured on the purchase */}
         <Field label={t("Date d'expiration")}>
@@ -159,13 +185,20 @@ export function ProductForm({ editing, onClose, onCreated }) {
           </label>
         </Field>
         <AnimatePresence initial={false}>
-          {form.trackExpiration && (
+          {form.trackExpiration && editing && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <Field label={t("Date d'expiration")}>
+                <Input type="date" value={form.expiration} onChange={set("expiration")} />
+              </Field>
+            </motion.div>
+          )}
+          {form.trackExpiration && !editing && (
             <motion.p initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
               exit={{ opacity: 0, height: 0 }}
               className="overflow-hidden rounded-xl bg-sky-50 px-4 py-2.5 text-xs text-sky-700 sm:col-span-2">
               <CalendarClock size={13} className="me-1 inline" />
               {t("La date d'expiration sera demandée lors de l'achat de ce produit.")}
-              {editing?.expiration ? ` ${t("Date actuelle")} : ${fmtDate(editing.expiration, lang)}` : ""}
             </motion.p>
           )}
         </AnimatePresence>
@@ -284,6 +317,8 @@ export default function Stock() {
     <div>
       <PageHeader title={t("Gestion de stock")} subtitle={t("Gérez vos produits et votre inventaire")}
         actions={can("stock", "create") && <Btn icon={Plus} onClick={() => setModal("new")}>{t("Nouveau produit")}</Btn>} />
+
+      <StockAlerts />
 
       <div className="mb-5 flex flex-wrap items-center gap-3">
         <div className="w-full sm:w-64">

@@ -9,6 +9,7 @@ import {
   fmtMoney, fmtDate, paidOf, dayOffset, todayISO, serviceNamesOf,
   saleAmounts, clientNameOf,
 } from "../store";
+import StockAlerts from "../components/StockAlerts";
 import { PageHeader, Badge, StatusBadge, listStagger, itemRise, CountUp } from "../components/ui";
 
 function StatCard({ icon: Icon, label, value, money, sub, grad }) {
@@ -113,6 +114,8 @@ export default function Dashboard() {
   return (
     <div>
       <PageHeader title={t("Tableau de bord")} subtitle={t("Vue d'ensemble de votre activité")} />
+
+      <StockAlerts />
 
       <motion.div variants={listStagger} initial="hidden" animate="show"
         className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">

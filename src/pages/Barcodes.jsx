@@ -9,6 +9,7 @@ import { uid, todayISO, fmtMoney, fmtDate } from "../store";
 import {
   randomEan13, normalizeEan13, isValidEan13, onlyDigits, DEFAULT_PREFIX,
   LABEL_SIZES as SIZES, DEFAULT_LABEL_OPTS as DEFAULT_OPTS, printLabels,
+  loadLabelSize, saveLabelSize,
 } from "../barcode";
 import {
   Btn, IconBtn, Field, Input, Select, SearchBox, Confirm, Empty,
@@ -22,7 +23,8 @@ export default function Barcodes() {
   const [form, setForm] = useState({ name: "", code: randomEan13(), price: "", productId: "" });
   const [syncProduct, setSyncProduct] = useState(true);
   const [q, setQ] = useState("");
-  const [size, setSize] = useState("medium");
+  const [size, setSizeState] = useState(loadLabelSize);
+  const setSize = (k) => { setSizeState(k); saveLabelSize(k); };
   const [opts, setOpts] = useState(DEFAULT_OPTS);
   const [copies, setCopies] = useState({});   // entryId -> number of labels
   const [picked, setPicked] = useState([]);   // selected entry ids
@@ -191,7 +193,7 @@ export default function Barcodes() {
               <div>
                 <p className="label">{t("Aperçu")}</p>
                 <div className="rounded-xl bg-primary-50/50 p-3">
-                  <LabelPreview entry={previewEntry} opts={opts} />
+                  <LabelPreview entry={previewEntry} opts={opts} size={size} />
                 </div>
               </div>
 
@@ -211,6 +213,9 @@ export default function Barcodes() {
               onChange={setSize}
               options={Object.entries(SIZES).map(([k, v]) => ({ value: k, label: v.label }))}
             />
+            <p className="w-full text-[11.5px] leading-snug text-slate-400">
+              {t("Imprimante d'étiquettes (Xprinter XP-300B) : choisissez la taille de vos étiquettes. Dans la fenêtre d'impression, sélectionnez le même format de papier, Marges « Aucune » et Échelle 100 %.")}
+            </p>
           </div>
 
           <div className="card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 p-4">

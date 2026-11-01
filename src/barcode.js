@@ -2,7 +2,7 @@
 // Self-contained (no library) so the same renderer feeds both the on-screen
 // preview and the printed label sheet.
 
-import { printHTML, esc, fmtMoney } from "./store";
+import { esc, fmtMoney } from "./store";
 
 // Module patterns for the three EAN-13 alphabets
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
@@ -118,58 +118,93 @@ export function ean13Svg(value, { height = 70, showText = true, color = "#111827
 // Shared by the Codes-barres library and the product sheet, so a label printed
 // from either place comes out identical.
 
-// Physical label formats (mm) + matching print font sizes
+// Physical label formats (mm) for a thermal label printer (Xprinter XP-300B /
+// XP-365B / XP-420B…). Each label is printed as ONE page of exactly its own size,
+// so the driver feeds one label per page — no A4 sheet, no margins, no scaling.
 export const LABEL_SIZES = {
-  small: { w: 38, h: 24, name: 6, price: 7.5, store: 5, label: "38 × 24 mm" },
-  medium: { w: 50, h: 30, name: 7.5, price: 9.5, store: 6, label: "50 × 30 mm" },
-  large: { w: 70, h: 40, name: 9.5, price: 12, store: 7, label: "70 × 40 mm" },
+  s40x30: { w: 40, h: 30, name: 6.5, price: 8.5, store: 5, label: "40 × 30 mm" },
+  s50x30: { w: 50, h: 30, name: 7.5, price: 9.5, store: 6, label: "50 × 30 mm" },
+  s58x40: { w: 58, h: 40, name: 8.5, price: 11, store: 6.5, label: "58 × 40 mm" },
+  s38x25: { w: 38, h: 25, name: 6, price: 7.5, store: 5, label: "38 × 25 mm" },
+  s70x40: { w: 70, h: 40, name: 9.5, price: 12, store: 7, label: "70 × 40 mm" },
 };
+// Legacy keys from older saved preferences
+const SIZE_ALIASES = { small: "s38x25", medium: "s50x30", large: "s70x40" };
+export const DEFAULT_LABEL_SIZE = "s40x30";
 
+const SIZE_KEY = "krimou.labelSize";
+export function loadLabelSize() {
+  try {
+    const v = localStorage.getItem(SIZE_KEY);
+    const k = SIZE_ALIASES[v] || v;
+    return LABEL_SIZES[k] ? k : DEFAULT_LABEL_SIZE;
+  } catch { return DEFAULT_LABEL_SIZE; }
+}
+export function saveLabelSize(k) {
+  try { localStorage.setItem(SIZE_KEY, k); } catch { /* ignore */ }
+}
+
+// Thermal labels are already die-cut: dashed borders would print as a frame
 export const DEFAULT_LABEL_OPTS = {
-  showName: true, showPrice: true, showCode: true, showStore: false, cutLines: true,
+  showName: true, showPrice: true, showCode: true, showStore: false, cutLines: false,
 };
 
 /**
+ * Print labels sized for a thermal label printer: one label = one page whose
+ * @page size equals the label, with zero margins. In the print dialog choose the
+ * printer's label paper (same size), Margins "None"/"Default" and Scale 100 %.
+ *
  * @param entries  [{ name, code, price, copies }]
  * @param size     key of LABEL_SIZES
- * @param opts     DEFAULT_LABEL_OPTS shape
- * @param store    garage name, printed when `opts.showStore`
  */
-export function printLabels(entries, { size = "medium", opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr" } = {}) {
+export function printLabels(entries, { size, opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr" } = {}) {
   const list = (entries || []).filter(Boolean);
   if (!list.length) return;
-  const S = LABEL_SIZES[size] || LABEL_SIZES.medium;
+  const key = SIZE_ALIASES[size] || size || loadLabelSize();
+  const S = LABEL_SIZES[key] || LABEL_SIZES[DEFAULT_LABEL_SIZE];
+  // Vertical budget: the barcode gets whatever name/price leave over
+  const hasText = opts.showCode;
 
   const label = (e) => `
     <div class="lbl">
       ${opts.showStore && store ? `<div class="lbl-s">${esc(store)}</div>` : ""}
       ${opts.showName ? `<div class="lbl-n">${esc(e.name)}</div>` : ""}
-      <div class="lbl-b">${ean13Svg(e.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode })}</div>
+      <div class="lbl-b">${ean13Svg(e.code, { height: hasText ? 50 : 56, showText: hasText, color: "#000" })}</div>
       ${opts.showPrice && Number(e.price) > 0 ? `<div class="lbl-p">${esc(fmtMoney(e.price))}</div>` : ""}
     </div>`;
 
   const cells = list
-    .flatMap((e) => Array.from({ length: Math.max(1, Number(e.copies) || 1) }, () => label(e)))
+    .flatMap((e) => Array.from({ length: Math.max(1, Math.min(500, Number(e.copies) || 1)) }, () => label(e)))
     .join("");
 
-  printHTML(title, `
-    <style>
-      body { padding: 8mm; }
-      .sheet { display: flex; flex-wrap: wrap; gap: 3mm; align-content: flex-start; }
-      .lbl {
-        width: ${S.w}mm; height: ${S.h}mm; padding: 1.5mm 2mm; overflow: hidden;
-        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.4mm;
-        break-inside: avoid; page-break-inside: avoid; background: #fff;
-        ${opts.cutLines ? "border: 0.3mm dashed #cbd5e1; border-radius: 1.5mm;" : ""}
-      }
-      .lbl-s { font-size: ${S.store}pt; color: #6b7280; text-transform: uppercase; letter-spacing: 0.4px; }
-      .lbl-n { font-size: ${S.name}pt; font-weight: 700; text-align: center; line-height: 1.15;
-               display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-      .lbl-b { width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; }
-      .lbl-b svg { width: 100%; height: 100%; }
-      .lbl-p { font-size: ${S.price}pt; font-weight: 800; font-family: monospace; }
-      @media print { body { padding: 4mm; } }
-    </style>
-    <div class="sheet">${cells}</div>
-  `, dir);
+  const w = window.open("", "_blank", "width=600,height=600");
+  if (!w) return;
+  w.document.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><title>${esc(title)}</title>
+  <style>
+    @page { size: ${S.w}mm ${S.h}mm; margin: 0; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: ${S.w}mm; background: #fff; }
+    body { font-family: Arial, 'Segoe UI', 'Tajawal', sans-serif; color: #000;
+           -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .lbl {
+      width: ${S.w}mm; height: ${S.h}mm; padding: 1.2mm 1.8mm; overflow: hidden;
+      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
+      gap: 0.3mm; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;
+      ${opts.cutLines ? "outline: 0.2mm dashed #999; outline-offset: -0.6mm;" : ""}
+    }
+    .lbl:last-child { page-break-after: auto; break-after: auto; }
+    .lbl-s { font-size: ${S.store}pt; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1; }
+    .lbl-n { width: 100%; font-size: ${S.name}pt; font-weight: 700; text-align: center; line-height: 1.1;
+             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+             word-break: break-word; }
+    .lbl-b { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
+    .lbl-b svg { width: 100%; height: 100%; display: block; }
+    .lbl-p { font-size: ${S.price}pt; font-weight: 800; font-family: Arial, sans-serif; line-height: 1; white-space: nowrap; }
+    @media screen {
+      html, body { width: auto; } body { background: #e5e7eb; padding: 10px; }
+      .lbl { background: #fff; margin: 0 auto 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+    }
+  </style></head><body>${cells}
+  <script>window.onload = () => setTimeout(() => window.print(), 150);<\/script></body></html>`);
+  w.document.close();
 }

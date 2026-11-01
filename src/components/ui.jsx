@@ -3,7 +3,7 @@ import { motion, AnimatePresence, useReducedMotion, animate } from "framer-motio
 import { X, Search, AlertTriangle, Inbox, LayoutGrid, Table2, ChevronDown } from "lucide-react";
 import { useApp } from "../context";
 import { fmtMoney } from "../store";
-import { ean13Svg, DEFAULT_LABEL_OPTS } from "../barcode";
+import { ean13Svg, DEFAULT_LABEL_OPTS, LABEL_SIZES } from "../barcode";
 
 // ===== Animated number (count-up) =====
 export function CountUp({ value, format = (v) => Math.round(v).toLocaleString("fr-FR") }) {
@@ -329,14 +329,17 @@ export function InfoRow({ label, value }) {
 }
 
 // ===== Barcode label — the on-screen twin of what `printLabels` puts on paper =====
-export function BarcodeLabel({ entry, opts = DEFAULT_LABEL_OPTS }) {
+export function BarcodeLabel({ entry, opts = DEFAULT_LABEL_OPTS, size }) {
+  // Keep the on-screen preview at the printed label's aspect ratio
+  const S = LABEL_SIZES[size];
   const { db } = useApp();
   const svg = useMemo(
     () => ean13Svg(entry.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode }),
     [entry.code, opts.showCode]
   );
   return (
-    <div className={`flex flex-col items-center justify-center gap-1 rounded-lg bg-white px-3 py-2.5 ${
+    <div style={S ? { aspectRatio: `${S.w} / ${S.h}`, maxWidth: 260, margin: "0 auto" } : undefined}
+      className={`flex flex-col items-center justify-between gap-1 overflow-hidden rounded-lg bg-white px-3 py-2 ${
       opts.cutLines ? "border border-dashed border-primary-200" : "border border-transparent"
     }`}>
       {opts.showStore && db.settings.name && (

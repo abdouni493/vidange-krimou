@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context";
 import { uid, todayISO, fmtMoney, fmtDate, findProductByCode } from "../store";
-import { randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels } from "../barcode";
+import { randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels, loadLabelSize, saveLabelSize, LABEL_SIZES } from "../barcode";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
   Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
@@ -40,6 +40,8 @@ export function ProductForm({ editing, onClose, onCreated }) {
   }));
   const [newCat, setNewCat] = useState(null); // null | string being typed
   const [copies, setCopies] = useState(1);
+  const [labelSize, setLabelSizeState] = useState(loadLabelSize);
+  const setLabelSize = (k) => { setLabelSizeState(k); saveLabelSize(k); };
   const [scanning, setScanning] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -59,10 +61,11 @@ export function ProductForm({ editing, onClose, onCreated }) {
       [{
         name: form.name.trim() || t("Nom du produit"),
         code: normalizeEan13(form.barcode || randomEan13()),
-        price: editing?.salePrice || editing?.purchasePrice || 0,
+        price: Number(form.salePrice) || editing?.salePrice || editing?.purchasePrice || 0,
         copies,
       }],
       {
+        size: labelSize,
         store: db.settings.name || "",
         title: t("Étiquettes code-barres"),
         dir: lang === "ar" ? "rtl" : "ltr",
@@ -231,10 +234,15 @@ export function ProductForm({ editing, onClose, onCreated }) {
                   <BarcodeLabel entry={{
                     name: form.name || t("Nom du produit"),
                     code: normalizeEan13(form.barcode),
-                    price: editing?.salePrice || editing?.purchasePrice || 0,
-                  }} />
+                    price: Number(form.salePrice) || editing?.salePrice || editing?.purchasePrice || 0,
+                  }} size={labelSize} />
                 </div>
-                <div className="flex items-end gap-2">
+                <div className="flex flex-wrap items-end gap-2">
+                  <Field label={t("Format")}>
+                    <Select value={labelSize} onChange={(e) => setLabelSize(e.target.value)} className="input w-32">
+                      {Object.entries(LABEL_SIZES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </Select>
+                  </Field>
                   <Field label={t("Copies")}>
                     <Input type="number" min="1" max="200" value={copies}
                       onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}

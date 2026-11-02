@@ -9,7 +9,7 @@ import { uid, todayISO, fmtMoney, fmtDate } from "../store";
 import {
   randomEan13, normalizeEan13, isValidEan13, onlyDigits, DEFAULT_PREFIX,
   LABEL_SIZES as SIZES, DEFAULT_LABEL_OPTS as DEFAULT_OPTS, printLabels,
-  loadLabelSize, saveLabelSize,
+  loadLabelSize, saveLabelSize, LABEL_ROTATIONS, loadLabelRotation, saveLabelRotation,
 } from "../barcode";
 import {
   Btn, IconBtn, Field, Input, Select, SearchBox, Confirm, Empty,
@@ -25,6 +25,8 @@ export default function Barcodes() {
   const [q, setQ] = useState("");
   const [size, setSizeState] = useState(loadLabelSize);
   const setSize = (k) => { setSizeState(k); saveLabelSize(k); };
+  const [rotation, setRotState] = useState(loadLabelRotation);
+  const setRotation = (k) => { setRotState(k); saveLabelRotation(k); };
   const [opts, setOpts] = useState(DEFAULT_OPTS);
   const [copies, setCopies] = useState({});   // entryId -> number of labels
   const [picked, setPicked] = useState([]);   // selected entry ids
@@ -102,7 +104,7 @@ export default function Barcodes() {
   // ---- print ----
   const print = (entries) =>
     printLabels((entries || []).map((e) => ({ ...e, copies: copyOf(e.id) })), {
-      size, opts,
+      size, rotation, opts,
       store: db.settings.name || "",
       title: t("Étiquettes code-barres"),
       dir: lang === "ar" ? "rtl" : "ltr",
@@ -213,8 +215,13 @@ export default function Barcodes() {
               onChange={setSize}
               options={Object.entries(SIZES).map(([k, v]) => ({ value: k, label: v.label }))}
             />
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("Rotation")}</span>
+              <Seg value={rotation} onChange={setRotation}
+                options={Object.entries(LABEL_ROTATIONS).map(([k, v]) => ({ value: k, label: v }))} />
+            </div>
             <p className="w-full text-[11.5px] leading-snug text-slate-400">
-              {t("Imprimante d'étiquettes (Xprinter XP-300B) : choisissez la taille de vos étiquettes. Dans la fenêtre d'impression, sélectionnez le même format de papier, Marges « Aucune » et Échelle 100 %.")}
+              {t("Imprimante d'étiquettes (Xprinter XP-300B) : choisissez la taille de vos étiquettes. Dans la fenêtre d'impression, sélectionnez le même format de papier, Marges « Aucune » et Échelle 100 %. Si l'étiquette sort de travers, changez la rotation.")}
             </p>
           </div>
 

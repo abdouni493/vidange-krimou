@@ -122,6 +122,7 @@ export function ean13Svg(value, { height = 70, showText = true, color = "#111827
 // XP-365B / XP-420B…). Each label is printed as ONE page of exactly its own size,
 // so the driver feeds one label per page — no A4 sheet, no margins, no scaling.
 export const LABEL_SIZES = {
+  s40x20: { w: 40, h: 20, name: 6, price: 7.5, store: 4.5, label: "40 × 20 mm" },
   s40x30: { w: 40, h: 30, name: 6.5, price: 8.5, store: 5, label: "40 × 30 mm" },
   s50x30: { w: 50, h: 30, name: 7.5, price: 9.5, store: 6, label: "50 × 30 mm" },
   s58x40: { w: 58, h: 40, name: 8.5, price: 11, store: 6.5, label: "58 × 40 mm" },
@@ -130,7 +131,21 @@ export const LABEL_SIZES = {
 };
 // Legacy keys from older saved preferences
 const SIZE_ALIASES = { small: "s38x25", medium: "s50x30", large: "s70x40" };
-export const DEFAULT_LABEL_SIZE = "s40x30";
+export const DEFAULT_LABEL_SIZE = "s40x20";
+
+// Chrome sends a page wider than tall as "landscape", and many thermal drivers
+// (XP-300B…) then rotate it 90° onto the label, printing it sideways. Rotating
+// the content ourselves on a portrait page cancels that out.
+export const LABEL_ROTATIONS = { r0: "0°", r90: "90°", r270: "270°" };
+export const DEFAULT_LABEL_ROTATION = "r90";
+const ROT_KEY = "krimou.labelRotation";
+export function loadLabelRotation() {
+  try { const v = localStorage.getItem(ROT_KEY); return LABEL_ROTATIONS[v] ? v : DEFAULT_LABEL_ROTATION; }
+  catch { return DEFAULT_LABEL_ROTATION; }
+}
+export function saveLabelRotation(k) {
+  try { localStorage.setItem(ROT_KEY, k); } catch { /* ignore */ }
+}
 
 const SIZE_KEY = "krimou.labelSize";
 export function loadLabelSize() {
@@ -157,21 +172,27 @@ export const DEFAULT_LABEL_OPTS = {
  * @param entries  [{ name, code, price, copies }]
  * @param size     key of LABEL_SIZES
  */
-export function printLabels(entries, { size, opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr" } = {}) {
+export function printLabels(entries, { size, rotation, opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr" } = {}) {
   const list = (entries || []).filter(Boolean);
   if (!list.length) return;
   const key = SIZE_ALIASES[size] || size || loadLabelSize();
   const S = LABEL_SIZES[key] || LABEL_SIZES[DEFAULT_LABEL_SIZE];
+  const rot = LABEL_ROTATIONS[rotation] ? rotation : loadLabelRotation();
+  const turned = rot !== "r0";
+  const pageW = turned ? S.h : S.w, pageH = turned ? S.w : S.h;
+  const transform = rot === "r90" ? `translateX(${S.h}mm) rotate(90deg)`
+    : rot === "r270" ? `translateY(${S.w}mm) rotate(-90deg)` : "none";
+  const lines = S.h <= 25 ? 1 : 2;
   // Vertical budget: the barcode gets whatever name/price leave over
   const hasText = opts.showCode;
 
   const label = (e) => `
-    <div class="lbl">
+    <div class="pg"><div class="lbl">
       ${opts.showStore && store ? `<div class="lbl-s">${esc(store)}</div>` : ""}
       ${opts.showName ? `<div class="lbl-n">${esc(e.name)}</div>` : ""}
       <div class="lbl-b">${ean13Svg(e.code, { height: hasText ? 50 : 56, showText: hasText, color: "#000" })}</div>
       ${opts.showPrice && Number(e.price) > 0 ? `<div class="lbl-p">${esc(fmtMoney(e.price))}</div>` : ""}
-    </div>`;
+    </div></div>`;
 
   const cells = list
     .flatMap((e) => Array.from({ length: Math.max(1, Math.min(500, Number(e.copies) || 1)) }, () => label(e)))
@@ -181,28 +202,30 @@ export function printLabels(entries, { size, opts = DEFAULT_LABEL_OPTS, store = 
   if (!w) return;
   w.document.write(`<!doctype html><html dir="${dir}"><head><meta charset="utf-8"><title>${esc(title)}</title>
   <style>
-    @page { size: ${S.w}mm ${S.h}mm; margin: 0; }
+    @page { size: ${pageW}mm ${pageH}mm; margin: 0; }
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { width: ${S.w}mm; background: #fff; }
+    html, body { width: ${pageW}mm; background: #fff; }
+    .pg { width: ${pageW}mm; height: ${pageH}mm; overflow: hidden; position: relative;
+          page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }
+    .pg:last-child { page-break-after: auto; break-after: auto; }
     body { font-family: Arial, 'Segoe UI', 'Tajawal', sans-serif; color: #000;
            -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .lbl {
-      width: ${S.w}mm; height: ${S.h}mm; padding: 1.2mm 1.8mm; overflow: hidden;
+      width: ${S.w}mm; height: ${S.h}mm; padding: ${S.h <= 25 ? "0.8mm 1.5mm" : "1.2mm 1.8mm"}; overflow: hidden;
       display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-      gap: 0.3mm; page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid;
+      gap: 0.3mm; position: absolute; top: 0; left: 0; transform-origin: top left; transform: ${transform};
       ${opts.cutLines ? "outline: 0.2mm dashed #999; outline-offset: -0.6mm;" : ""}
     }
-    .lbl:last-child { page-break-after: auto; break-after: auto; }
     .lbl-s { font-size: ${S.store}pt; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1; }
     .lbl-n { width: 100%; font-size: ${S.name}pt; font-weight: 700; text-align: center; line-height: 1.1;
-             display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+             display: -webkit-box; -webkit-line-clamp: ${lines}; -webkit-box-orient: vertical; overflow: hidden;
              word-break: break-word; }
     .lbl-b { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
     .lbl-b svg { width: 100%; height: 100%; display: block; }
     .lbl-p { font-size: ${S.price}pt; font-weight: 800; font-family: Arial, sans-serif; line-height: 1; white-space: nowrap; }
     @media screen {
       html, body { width: auto; } body { background: #e5e7eb; padding: 10px; }
-      .lbl { background: #fff; margin: 0 auto 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
+      .pg { background: #fff; margin: 0 auto 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
     }
   </style></head><body>${cells}
   <script>window.onload = () => setTimeout(() => window.print(), 150);<\/script></body></html>`);

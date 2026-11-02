@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context";
 import { uid, todayISO, fmtMoney, fmtDate, findProductByCode } from "../store";
-import { randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels, loadLabelSize, saveLabelSize, LABEL_SIZES } from "../barcode";
+import { randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels, loadLabelSize, saveLabelSize, LABEL_SIZES, LABEL_ROTATIONS, loadLabelRotation, saveLabelRotation } from "../barcode";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
   Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
@@ -42,6 +42,8 @@ export function ProductForm({ editing, onClose, onCreated }) {
   const [copies, setCopies] = useState(1);
   const [labelSize, setLabelSizeState] = useState(loadLabelSize);
   const setLabelSize = (k) => { setLabelSizeState(k); saveLabelSize(k); };
+  const [labelRot, setLabelRotState] = useState(loadLabelRotation);
+  const setLabelRot = (k) => { setLabelRotState(k); saveLabelRotation(k); };
   const [scanning, setScanning] = useState(false);
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
@@ -66,6 +68,7 @@ export function ProductForm({ editing, onClose, onCreated }) {
       }],
       {
         size: labelSize,
+        rotation: labelRot,
         store: db.settings.name || "",
         title: t("Étiquettes code-barres"),
         dir: lang === "ar" ? "rtl" : "ltr",
@@ -241,6 +244,11 @@ export function ProductForm({ editing, onClose, onCreated }) {
                   <Field label={t("Format")}>
                     <Select value={labelSize} onChange={(e) => setLabelSize(e.target.value)} className="input w-32">
                       {Object.entries(LABEL_SIZES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </Select>
+                  </Field>
+                  <Field label={t("Rotation")}>
+                    <Select value={labelRot} onChange={(e) => setLabelRot(e.target.value)} className="input w-24">
+                      {Object.entries(LABEL_ROTATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                     </Select>
                   </Field>
                   <Field label={t("Copies")}>

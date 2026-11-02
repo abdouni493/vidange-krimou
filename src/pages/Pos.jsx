@@ -634,10 +634,9 @@ export default function Pos() {
                         <IconBtn icon={Plus} title="+" onClick={() => setQty(l.productId, l.qty + 1)} />
                       </div>
                       <div className="flex items-center gap-1.5">
-                        <input type="number" min="0" value={l.price}
-                          onChange={(e) => setLine(l.productId, { price: Math.max(0, Number(e.target.value) || 0) })}
-                          className="input h-9 w-24 px-2 py-1 text-end font-mono text-sm"
-                          title={t("Prix de vente")} />
+                        <span className="w-24 text-end font-mono text-sm text-slate-500" title={t("Prix de vente")}>
+                          {fmtMoney(Number(l.price) || 0)}
+                        </span>
                         <span className="w-24 text-end font-mono text-[13px] font-extrabold text-primary-900">
                           {fmtMoney((Number(l.price) || 0) * (Number(l.qty) || 0))}
                         </span>

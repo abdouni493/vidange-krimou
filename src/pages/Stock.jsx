@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Pencil, Trash2, Eye, Package, AlertTriangle, Shuffle, Printer, Check,
-  CalendarClock, ScanLine,
+  CalendarClock, ScanLine, ClipboardList,
 } from "lucide-react";
 import { useApp } from "../context";
 import { uid, todayISO, fmtMoney, fmtDate, findProductByCode } from "../store";
@@ -304,7 +304,49 @@ function ProductView({ product, onClose }) {
           ? (product.expiration ? fmtDate(product.expiration, lang) : t("À définir lors de l'achat"))
           : t("Non suivie")} />
       <InfoRow label={t("Ajouté le")} value={fmtDate(product.createdAt, lang)} />
+      <LastInventory product={product} />
     </Modal>
+  );
+}
+
+/**
+ * Lien avec l'interface « Inventaire » : le dernier comptage où figure ce
+ * produit, son décalage s'il a été comparé, et si le stock a été corrigé.
+ */
+function LastInventory({ product }) {
+  const { db, t, lang, can } = useApp();
+  const hit = (db.inventaires || [])
+    .filter((i) => (i.lines || []).some((l) => l.productId === product.id))
+    .sort((a, b) => String(b.date).localeCompare(String(a.date)))[0];
+  if (!can("inventaire", "view")) return null;
+  const line = hit?.lines.find((l) => l.productId === product.id);
+  const ecart = hit?.comparison?.lines?.find((l) => l.productId === product.id);
+  return (
+    <div className="mt-4 rounded-xl border border-primary-100 bg-primary-50/40 p-3">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-primary-700">
+          <ClipboardList size={14} /> {t("Dernier inventaire")}
+        </p>
+        <button onClick={() => { window.location.hash = "#/inventaire"; }}
+          className="cursor-pointer text-xs font-semibold text-primary-600 hover:text-primary-800">
+          {t("Ouvrir l'inventaire")} →
+        </button>
+      </div>
+      {!hit ? (
+        <p className="text-xs text-slate-400">{t("Ce produit n'a encore jamais été compté.")}</p>
+      ) : (
+        <>
+          <InfoRow label={t("Inventaire")} value={`${hit.ref} — ${fmtDate(hit.date, lang)}`} />
+          <InfoRow label={t("Quantité comptée")} value={line?.countedQty} />
+          {ecart && (
+            <InfoRow label={t("Décalage")}
+              value={<span className={ecart.ecart < 0 ? "text-red-600" : ecart.ecart > 0 ? "text-green-600" : ""}>
+                {ecart.ecart > 0 ? "+" : ""}{ecart.ecart} ({fmtMoney(Math.abs(ecart.value))})</span>} />
+          )}
+          <InfoRow label={t("État")} value={hit.status === "corrected" ? t("Stock corrigé") : hit.comparison ? t("Comparé") : t("Non comparé")} />
+        </>
+      )}
+    </div>
   );
 }
 
@@ -332,7 +374,12 @@ export default function Stock() {
   return (
     <div>
       <PageHeader title={t("Gestion de stock")} subtitle={t("Gérez vos produits et votre inventaire")}
-        actions={can("stock", "create") && <Btn icon={Plus} onClick={() => setModal("new")}>{t("Nouveau produit")}</Btn>} />
+        actions={<>
+          {can("inventaire", "view") && (
+            <Btn variant="soft" icon={ClipboardList} onClick={() => { window.location.hash = "#/inventaire"; }}>{t("Inventaire")}</Btn>
+          )}
+          {can("stock", "create") && <Btn icon={Plus} onClick={() => setModal("new")}>{t("Nouveau produit")}</Btn>}
+        </>} />
 
       <StockAlerts />
 

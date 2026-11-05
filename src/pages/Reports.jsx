@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   BarChart3, Wallet, ShoppingCart, Receipt, TrendingUp, UserX, Truck,
-  HardHat, Boxes, Landmark, Printer,
+  HardHat, Boxes, Landmark, Printer, ClipboardList,
 } from "lucide-react";
 import { useApp } from "../context";
 import {
@@ -101,6 +101,11 @@ export default function Reports() {
     const stockValue = db.products.reduce((s, p) => s + Number(p.qtyCurrent) * Number(p.purchasePrice), 0);
     const lowStock = db.products.filter((p) => Number(p.qtyCurrent) <= Number(p.minQty));
 
+    // Inventaires comparés dans la période : écarts constatés au prix d'achat
+    const invs = (db.inventaires || []).filter((i) => i.comparison && inRange(i.date, from, to));
+    const invLoss = invs.reduce((s, i) => s + (Number(i.comparison.lossValue) || 0), 0);
+    const invGain = invs.reduce((s, i) => s + (Number(i.comparison.gainValue) || 0), 0);
+
     const gain = salesPaid - purchPaid - expTotal - workerTotal;
 
     setReport({
@@ -108,7 +113,7 @@ export default function Reports() {
       repairsTotal, repairsPaid, sales, posTotal, posPaid, posItems, posDiscount,
       purchases, purchTotal, purchPaid, expenses, expTotal, expByCat,
       caisseByCat, workerPays, workerTotal, clientDebts, supplierDebts,
-      stockValue, lowStock, gain,
+      stockValue, lowStock, gain, invs, invLoss, invGain,
       clientDebtTotal: clientDebts.reduce((s, x) => s + x.rest, 0),
       supplierDebtTotal: supplierDebts.reduce((s, x) => s + x.rest, 0),
     });
@@ -132,6 +137,8 @@ export default function Reports() {
         ${line(t("Dettes clients"), fmtMoney(report.clientDebtTotal))}
         ${line(t("Dettes fournisseurs"), fmtMoney(report.supplierDebtTotal))}
         ${line(t("Valeur du stock"), fmtMoney(report.stockValue))}
+        ${line(t("Manquants d'inventaire"), fmtMoney(report.invLoss))}
+        ${line(t("Surplus d'inventaire"), fmtMoney(report.invGain))}
       </table>
       <h2>${t("Ventes comptoir")}</h2>
       <table>
@@ -271,6 +278,17 @@ export default function Reports() {
               </div>
             </Section>
 
+            <Section icon={ClipboardList} title={t("Inventaires")} extra={<Badge>{report.invs.length}</Badge>}>
+              <div className="space-y-1.5">
+                <MoneyLine label={t("Manquants (pertes)")} value={fmtMoney(report.invLoss)} color="text-red-500" />
+                <MoneyLine label={t("Surplus (gains)")} value={fmtMoney(report.invGain)} color="text-emerald-600" />
+                <MoneyLine label={t("Impact net")} value={fmtMoney(report.invGain - report.invLoss)} big />
+                {report.invs.map((i) => (
+                  <MoneyLine key={i.id} label={`${i.ref}${i.status === "corrected" ? ` · ${t("Stock corrigé")}` : ""}`}
+                    value={fmtMoney(i.comparison.netValue)} />
+                ))}
+              </div>
+            </Section>
             <Section icon={Boxes} title={t("Valeur du stock")}>
               <div className="space-y-1.5">
                 <MoneyLine label={t("Valeur du stock")} value={fmtMoney(report.stockValue)} big />

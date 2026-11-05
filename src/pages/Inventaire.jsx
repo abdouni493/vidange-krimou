@@ -18,10 +18,11 @@ import { motion } from "framer-motion";
 import {
   ClipboardList, Plus, Calendar, CheckCircle2, ArrowRight, ArrowLeft, X, Printer,
   Scale, AlertTriangle, TrendingDown, TrendingUp, Save, ShieldCheck, Layers, PackageCheck,
-  FileText, Undo2, Ban, Boxes, ListChecks, RotateCcw, Eye, Pencil, Trash2, Check,
+  FileText, Undo2, Ban, Boxes, ListChecks, RotateCcw, Eye, Pencil, Trash2, Check, ScanLine,
 } from "lucide-react";
 import { useApp } from "../context";
-import { uid, todayISO, fmtMoney, fmtDate, inRange, presetRange, esc, docHead, printHTML, productMatches } from "../store";
+import { uid, todayISO, fmtMoney, fmtDate, inRange, presetRange, esc, docHead, printHTML, productMatches, findProductByCode } from "../store";
+import BarcodeScanner from "../components/BarcodeScanner";
 import {
   STATUS_META, inventaireRefFor, countedQtyOf, countedValueOf, buildComparison,
   correctionDeltas, buildBackup, applyCorrection, restoreBackup, fmtQty, round,
@@ -54,7 +55,9 @@ export default function Inventaire() {
   const canCreate = can("inventaire", "create");
   const canEdit = can("inventaire", "edit");
   const canDelete = can("inventaire", "delete");
-  const canCorrect = can("inventaire", "correct");
+  // Corriger écrit les quantités des produits : il faut aussi le droit de
+  // modifier la gestion de stock.
+  const canCorrect = can("inventaire", "correct") && can("stock", "edit");
   const canPrint = can("inventaire", "print");
 
   const range = presetRange(preset);
@@ -129,7 +132,12 @@ export default function Inventaire() {
       <PageHeader
         title={t("Inventaire")}
         subtitle={t("Comptage physique du stock & écarts")}
-        actions={canCreate && <Btn icon={Plus} onClick={() => setWizard({ editing: null })}>{t("Nouvel inventaire")}</Btn>}
+        actions={<>
+          {can("stock", "view") && (
+            <Btn variant="soft" icon={Boxes} onClick={() => { window.location.hash = "#/stock"; }}>{t("Gestion de stock")}</Btn>
+          )}
+          {canCreate && <Btn icon={Plus} onClick={() => setWizard({ editing: null })}>{t("Nouvel inventaire")}</Btn>}
+        </>}
       />
 
       {flash && (
@@ -303,6 +311,8 @@ function InventaireWizard({ initial, author, onClose, notify }) {
   const [notes, setNotes] = useState(initial?.notes || "");
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState("all");
+  const [scanning, setScanning] = useState(false);
+  const [scanMsg, setScanMsg] = useState("");
 
   // Lignes retenues, dans l'ordre de sélection : productId -> valeur saisie
   const [lines, setLines] = useState(() => {
@@ -344,6 +354,33 @@ function InventaireWizard({ initial, author, onClose, notify }) {
     const next = ordered[idx + 1] || ordered[0];
     const el = next && qtyRefs.current[next.id];
     el?.focus(); el?.select();
+  };
+
+  /**
+   * Un code-barres scanné (douchette ou caméra) ajoute le produit au comptage
+   * et place le curseur sur sa quantité — ou y ajoute 1 s'il est déjà compté
+   * avec la caméra, pour compter un rayon pièce par pièce.
+   */
+  const addByCode = (code, { increment = false } = {}) => {
+    const p = findProductByCode(db, code);
+    if (!p) return { ok: false, message: `${t("Aucun produit avec ce code")} : ${code}` };
+    setLines((prev) => {
+      const n = new Map(prev);
+      if (!n.has(p.id)) n.set(p.id, increment ? "1" : "");
+      else if (increment) n.set(p.id, String(round((Number(n.get(p.id)) || 0) + 1)));
+      return n;
+    });
+    setTimeout(() => { const el = qtyRefs.current[p.id]; el?.focus(); el?.select(); }, 60);
+    return { ok: true, message: `${p.name} — ${t("ajouté au comptage")}` };
+  };
+  const onSearchKey = (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    const res = addByCode(query.trim());
+    if (res.ok) setQuery("");
+    else if (visible.length === 1) { addMany(visible); setQuery(""); }
+    setScanMsg(res.ok ? res.message : visible.length === 1 ? `${visible[0].name} — ${t("ajouté au comptage")}` : res.message);
+    setTimeout(() => setScanMsg(""), 2500);
   };
 
   const filled = ordered.filter((p) => String(lines.get(p.id)).trim() !== "").length;
@@ -453,8 +490,10 @@ function InventaireWizard({ initial, author, onClose, notify }) {
               <div className="space-y-3 border-b border-primary-100 bg-primary-50/30 px-4 py-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="min-w-[220px] flex-1">
-                    <SearchBox value={query} onChange={setQuery} placeholder={t("Rechercher un produit par nom ou code-barres…")} />
+                    <SearchBox value={query} onChange={setQuery} onKeyDown={onSearchKey} autoFocus
+                      placeholder={t("Rechercher ou scanner un code-barres (Entrée pour ajouter)…")} />
                   </div>
+                  <Btn variant="soft" icon={ScanLine} onClick={() => setScanning(true)}>{t("Scanner")}</Btn>
                   <div className="min-w-[180px]">
                     <Select value={catFilter} onChange={(e) => setCatFilter(e.target.value)}>
                       <option value="all">{t("Toutes les catégories")}</option>
@@ -462,6 +501,7 @@ function InventaireWizard({ initial, author, onClose, notify }) {
                     </Select>
                   </div>
                 </div>
+                {scanMsg && <p className="text-xs font-semibold text-primary-700">{scanMsg}</p>}
                 <div className="flex flex-wrap gap-2">
                   <Btn variant="soft" icon={Boxes} className="!px-3 !py-2 text-xs" onClick={() => addMany(products)}>
                     {t("Tous les produits")} ({products.length})
@@ -549,6 +589,10 @@ function InventaireWizard({ initial, author, onClose, notify }) {
           </div>
         </StepPane>
       )}
+      <BarcodeScanner open={scanning} onClose={() => setScanning(false)}
+        onScan={(code) => addByCode(code, { increment: true })}
+        title={t("Scanner pour compter")}
+        subtitle={t("Chaque lecture ajoute 1 à la quantité comptée du produit.")} />
     </Modal>
   );
 }

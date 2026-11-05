@@ -15,6 +15,44 @@ import {
   COLLECTIONS, JSON_COLS, JSON_EMPTY, BOOL_COLS, NUM_COLS, SETTINGS_COLS, SETTINGS_JSON,
 } from "./mapping.js";
 
+// ---- Inventaires : un fichier JSON dans le bucket privé `documents` ----
+// Le bucket existe déjà et tout le personnel connecté peut y lire et écrire :
+// aucune table ni aucun script SQL n'est nécessaire pour l'interface
+// « Inventaire ». Le fichier contient la liste complète des inventaires.
+const INV_BUCKET = "documents";
+const INV_PATH = "inventaire/inventaires.json";
+// Une lecture ratée (réseau, droits) ne doit jamais faire écraser le fichier
+// par une liste vide : tant qu'elle n'a pas réussi, l'écriture est refusée.
+let inventairesReadable = false;
+
+async function readInventaires() {
+  const { data, error } = await supabase.storage.from(INV_BUCKET).download(INV_PATH, { cacheNonce: Date.now() });
+  if (error) {
+    const msg = `${error.message || ""} ${error.statusCode || error.status || ""}`;
+    if (/not.?found|404|does not exist/i.test(msg)) { inventairesReadable = true; return []; }
+    inventairesReadable = false;
+    return [];
+  }
+  try {
+    const list = JSON.parse(await data.text());
+    inventairesReadable = true;
+    return Array.isArray(list) ? list : [];
+  } catch {
+    inventairesReadable = false;
+    return [];
+  }
+}
+
+async function writeInventaires(list) {
+  if (!inventairesReadable) {
+    throw new Error("Inventaires : lecture impossible depuis le serveur, enregistrement annulé pour ne rien écraser — rechargez la page");
+  }
+  const body = new Blob([JSON.stringify(list || [])], { type: "application/json" });
+  const { error } = await supabase.storage.from(INV_BUCKET)
+    .upload(INV_PATH, body, { upsert: true, contentType: "application/json", cacheControl: "0" });
+  if (error) fail("Enregistrement des inventaires", error);
+}
+
 const PAGE = 1000;          // PostgREST plafonne une réponse à 1000 lignes
 const CHUNK = 400;          // taille d'un lot d'écriture
 
@@ -143,7 +181,7 @@ export async function fetchAll() {
 
   // Les collections sont indépendantes : on les lit en parallèle.
   const parents = await Promise.all(COLLECTIONS.map((s) =>
-    s.optional ? selectAll(s.table).catch(() => []) : selectAll(s.table)));
+    selectAll(s.table)));
 
   const childJobs = [];
   COLLECTIONS.forEach((spec, i) => {
@@ -191,6 +229,8 @@ export async function fetchAll() {
   const { data: settings } = await supabase.from("settings").select("*").eq("id", 1).maybeSingle();
   doc.settings = {};
   for (const col of SETTINGS_COLS) doc.settings[col] = settingValue(col, settings?.[col]);
+
+  doc.inventaires = await readInventaires();
 
   const { data: counters } = await supabase.from("counters").select("*").eq("id", 1).maybeSingle();
   doc.counters = {
@@ -368,6 +408,10 @@ export async function pushAll(prevDoc, nextDoc) {
     if (error) fail("Enregistrement des compteurs", error);
   }
 
+  if (!same(prevDoc?.inventaires || [], stored?.inventaires || [])) {
+    await writeInventaires(stored.inventaires);
+  }
+
   return stored;
 }
 
@@ -375,9 +419,10 @@ export async function pushAll(prevDoc, nextDoc) {
 export async function resetAll() {
   for (const spec of [...COLLECTIONS].reverse()) {
     const { error } = await supabase.from(spec.table).delete().not("id", "is", null);
-    if (error && !spec.optional) fail(`Réinitialisation de « ${spec.table} »`, error);
+    if (error) fail(`Réinitialisation de « ${spec.table} »`, error);
   }
   await supabase.from("counters").upsert({ id: 1, purchase: 1, sale: 1 }, { onConflict: "id" });
+  if (inventairesReadable) await writeInventaires([]).catch(() => {});
   const blank = { id: 1, updated_at: new Date().toISOString() };
   for (const col of SETTINGS_COLS) blank[col] = settingValue(col, null);
   await supabase.from("settings").upsert(blank, { onConflict: "id" });

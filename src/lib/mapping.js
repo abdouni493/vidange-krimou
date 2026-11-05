@@ -77,22 +77,6 @@ export const COLLECTIONS = [
     },
   },
   {
-    // Inventaires physiques : les lignes comptées, le rapport d'écarts et la
-    // sauvegarde d'avant correction voyagent en JSON — un inventaire se lit et
-    // s'écrit toujours d'un bloc. `optional` : une base où la migration n'a pas
-    // encore été jouée affiche simplement une liste vide.
-    key: "inventaires",
-    table: "inventaires",
-    newestFirst: true,
-    optional: true,
-    cols: {
-      id: "id", ref: "ref", date: "date", status: "status", lines: "lines",
-      notes: "notes", createdBy: "created_by", completedAt: "completed_at",
-      comparison: "comparison", correctedAt: "corrected_at",
-      correctedBy: "corrected_by", backup: "backup", createdAt: "created_at",
-    },
-  },
-  {
     key: "expenseCategories",
     table: "expense_categories",
     cols: { id: "id", name: "name", createdAt: "created_at" },
@@ -234,13 +218,10 @@ export const COLLECTIONS = [
 export const JSON_COLS = new Set([
   "pay", "account", "permissions", "settled_repair_ids",
   "car", "tva", "discount", "details", "discount_rule",
-  "lines", "comparison", "backup",
 ]);
 
-// Colonnes JSON dont la valeur vide n'est pas `{}` : une liste vide, ou `null`
-// (un inventaire non comparé n'a pas de rapport — `{}` le ferait passer pour
-// comparé).
-export const JSON_EMPTY = { settled_repair_ids: [], lines: [], comparison: null, backup: null };
+// Colonnes JSON dont la valeur vide n'est pas `{}`.
+export const JSON_EMPTY = { settled_repair_ids: [] };
 
 // Colonnes booléennes : PostgREST refuse une chaîne vide sur un boolean.
 export const BOOL_COLS = new Set(["track_expiration", "settled"]);

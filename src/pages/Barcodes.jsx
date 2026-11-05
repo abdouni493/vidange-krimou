@@ -8,12 +8,14 @@ import { useApp } from "../context";
 import { uid, todayISO, fmtMoney, fmtDate } from "../store";
 import {
   randomEan13, normalizeEan13, isValidEan13, onlyDigits, DEFAULT_PREFIX,
-  LABEL_SIZES as SIZES, DEFAULT_LABEL_OPTS as DEFAULT_OPTS, printLabels,
-  loadLabelSize, saveLabelSize, LABEL_ROTATIONS, loadLabelRotation, saveLabelRotation,
+  DEFAULT_LABEL_OPTS as DEFAULT_OPTS, printLabels,
+  loadLabelSize, saveLabelSize, loadLabelRotation, saveLabelRotation,
 } from "../barcode";
+import { printLabelsAuto } from "../lib/labelPrinter";
+import { useLabelPrinter, LabelPrinterPanel, LabelBitmapPreview, PrintIssue } from "../components/LabelPrinter";
 import {
   Btn, IconBtn, Field, Input, Select, SearchBox, Confirm, Empty,
-  PageHeader, CardGrid, itemRise, Badge, Seg, BarcodeLabel as LabelPreview,
+  PageHeader, CardGrid, itemRise, Badge, BarcodeLabel as LabelPreview,
 } from "../components/ui";
 
 export default function Barcodes() {
@@ -32,6 +34,8 @@ export default function Barcodes() {
   const [picked, setPicked] = useState([]);   // selected entry ids
   const [confirm, setConfirm] = useState(null);
   const [flash, setFlash] = useState("");
+  const [printIssue, setPrintIssue] = useState(null);
+  const lp = useLabelPrinter();
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
   const toggleOpt = (k) => setOpts((o) => ({ ...o, [k]: !o[k] }));
@@ -102,13 +106,28 @@ export default function Barcodes() {
   const totalLabels = selected.reduce((n, b) => n + copyOf(b.id), 0);
 
   // ---- print ----
-  const print = (entries) =>
-    printLabels((entries || []).map((e) => ({ ...e, copies: copyOf(e.id) })), {
-      size, rotation, opts,
-      store: db.settings.name || "",
-      title: t("Étiquettes code-barres"),
-      dir: lang === "ar" ? "rtl" : "ltr",
+  // Direct vers l'imprimante d'étiquettes quand le serveur local la voit,
+  // sinon par la fenêtre d'impression de Chrome.
+  const printOptions = {
+    size, rotation, opts,
+    store: db.settings.name || "",
+    title: t("Étiquettes code-barres"),
+    dir: lang === "ar" ? "rtl" : "ltr",
+  };
+  const print = (entries) => {
+    const list = (entries || []).map((e) => ({ ...e, copies: copyOf(e.id) }));
+    if (!list.length) return;
+    setPrintIssue(null);
+    printLabelsAuto(list, printOptions).then((r) => {
+      if (r.ok && r.mode === "direct") {
+        notify(`${r.count} ${t("étiquette(s) envoyée(s) à")} ${r.printer}`);
+      } else if (r.ok && r.fallback) {
+        setPrintIssue({ tone: "warning", message: `${t("Impression directe indisponible")} — ${t("impression par la fenêtre de Chrome.")}` });
+      } else if (!r.ok && r.message) {
+        setPrintIssue({ tone: "error", message: t(r.message), list });
+      }
     });
+  };
 
   const canCreate = can("barcodes", "create");
   const canPrint = can("barcodes", "print");
@@ -195,7 +214,12 @@ export default function Barcodes() {
               <div>
                 <p className="label">{t("Aperçu")}</p>
                 <div className="rounded-xl bg-primary-50/50 p-3">
-                  <LabelPreview entry={previewEntry} opts={opts} size={size} />
+                  {lp.direct ? (
+                    <LabelBitmapPreview entry={previewEntry} opts={opts} size={size}
+                      store={db.settings.name || ""} settings={lp.settings} />
+                  ) : (
+                    <LabelPreview entry={previewEntry} opts={opts} size={size} />
+                  )}
                 </div>
               </div>
 
@@ -206,23 +230,18 @@ export default function Barcodes() {
 
         {/* ===== Library ===== */}
         <div className={canCreate ? "" : "xl:col-span-2"}>
+          <LabelPrinterPanel lp={lp} size={size} onSizeChange={setSize}
+            rotation={rotation} onRotationChange={setRotation}
+            previewEntry={selected[0] || (form.name ? previewEntry : library[0]) || previewEntry}
+            opts={opts} store={db.settings.name || ""} />
+
+          <PrintIssue issue={printIssue} onClose={() => setPrintIssue(null)}
+            onBrowser={printIssue?.list ? () => { printLabels(printIssue.list, printOptions); setPrintIssue(null); } : undefined} />
+
           <div className="card mb-4 flex flex-wrap items-center gap-3 p-4">
             <div className="min-w-[200px] flex-1">
               <SearchBox value={q} onChange={setQ} placeholder={t("Rechercher un code ou un produit...")} />
             </div>
-            <Seg
-              value={size}
-              onChange={setSize}
-              options={Object.entries(SIZES).map(([k, v]) => ({ value: k, label: v.label }))}
-            />
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold uppercase tracking-wide text-slate-400">{t("Rotation")}</span>
-              <Seg value={rotation} onChange={setRotation}
-                options={Object.entries(LABEL_ROTATIONS).map(([k, v]) => ({ value: k, label: v }))} />
-            </div>
-            <p className="w-full text-[11.5px] leading-snug text-slate-400">
-              {t("Imprimante d'étiquettes (Xprinter XP-300B) : choisissez la taille de vos étiquettes. Dans la fenêtre d'impression, sélectionnez le même format de papier, Marges « Aucune » et Échelle 100 %. Si l'étiquette sort de travers, changez la rotation.")}
-            </p>
           </div>
 
           <div className="card mb-4 flex flex-wrap items-center gap-x-5 gap-y-2 p-4">

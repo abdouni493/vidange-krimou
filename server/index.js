@@ -5,6 +5,8 @@
 // rôle — livrer l'application compilée depuis `dist/`.
 //
 //   GET  /api/health   sonde utilisée par le lanceur AutoGarage.bat
+//   GET  /api/printers, POST /api/print/raw
+//                      impression directe des étiquettes (voir printer.js)
 //   GET  /*            l'application (repli sur index.html pour les routes SPA)
 //
 // Rappel : le scanner de codes-barres exige une origine sécurisée. En local,
@@ -16,6 +18,7 @@ import { readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { handlePrintRoute } from "./printer.js";
 
 const ROOT = resolve(fileURLToPath(new URL("../", import.meta.url)));
 const DIST = join(ROOT, "dist");
@@ -90,7 +93,10 @@ async function serveStatic(res, pathname) {
 const server = http.createServer(async (req, res) => {
   const pathname = new URL(req.url, `http://${req.headers.host || "localhost"}`).pathname;
   try {
-    if (pathname === "/api/health") return sendJSON(res, 200, { ok: true, storage: "supabase" });
+    // `labels` : ce serveur sait imprimer les étiquettes en direct — le lanceur
+    // s'en sert pour redémarrer un serveur d'une version précédente.
+    if (pathname === "/api/health") return sendJSON(res, 200, { ok: true, storage: "supabase", labels: true });
+    if (await handlePrintRoute(req, res, pathname)) return;
     if (pathname.startsWith("/api/")) return sendJSON(res, 404, { error: "Route introuvable" });
     if (req.method !== "GET" && req.method !== "HEAD") {
       return sendJSON(res, 405, { error: "Méthode non autorisée" });

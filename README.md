@@ -48,6 +48,8 @@ Ensuite, **Permissions** sur la fiche : cochez les interfaces visibles, puis les
 
 Double-cliquez sur le raccourci **AutoGarage Pro**, ou sur `AutoGarage.bat`. Le lanceur installe les dépendances, compile, démarre le serveur et ouvre <http://localhost:5180>.
 
+Après une mise à jour du code, le même raccourci recompile l'application tout seul (`tools/needs-build.mjs` compare les sources à la dernière compilation) et relance un serveur d'une version précédente.
+
 Pour (re)créer les raccourcis Bureau et menu Démarrer :
 
 ```bash
@@ -185,7 +187,21 @@ Le test remplace le client Supabase par un faux — un enregistreur d'appels, pu
 
 ## 7. Codes-barres et impression
 
-L'interface **Codes-barres** génère des codes **EAN-13 valides** (préfixe GS1 `613`, chiffre de contrôle calculé) et imprime des planches d'étiquettes : génération aléatoire ou saisie manuelle corrigée, pré-remplissage depuis un produit du stock, 3 formats d'étiquettes (38×24, 50×30, 70×40 mm), contenu configurable, impression par lot. Le rendu est fait maison (`src/barcode.js`, SVG, sans dépendance) et sert à l'écran comme au papier.
+L'interface **Codes-barres** génère des codes **EAN-13 valides** (préfixe GS1 `613`, chiffre de contrôle calculé) et imprime des étiquettes : génération aléatoire ou saisie manuelle corrigée, pré-remplissage depuis un produit du stock, formats 40×20, 30×20, 40×30, 50×25, 50×30, 58×40, 38×25 et 70×40 mm, contenu configurable, impression par lot.
+
+### Impression directe sur l'imprimante d'étiquettes (Xprinter XP-300B…)
+
+Imprimée par la fenêtre de Chrome, une étiquette dépend du format de papier du pilote Windows et des marges, de l'échelle et des en-têtes que Chrome mémorise : dès qu'ils ne correspondent pas à l'étiquette, l'impression déborde sur la suivante et se décale. L'impression **directe** supprime ces intermédiaires :
+
+1. le navigateur dessine chaque étiquette point par point à la résolution de la tête (203 dpi : une étiquette 40×20 mm = 320×160 points), barres EAN-13 calées sur des points entiers (`src/lib/labelPrinter.js`) ;
+2. il en fait un travail **TSPL** (`SIZE 40 mm,20 mm`, `GAP 2 mm,0 mm`, `BITMAP`, `PRINT`) ;
+3. le serveur local le remet tel quel au spouleur Windows en mode **RAW** (`server/printer.js`, API `winspool.drv` via PowerShell, rien à installer) : l'imprimante mesure elle-même ses étiquettes et démarre chacune au bon endroit.
+
+Aucun réglage Windows n'est nécessaire. Dans **Codes-barres › Imprimante d'étiquettes** : choisir l'imprimante (détectée automatiquement) et le format, puis **Imprimer un test** — un cadre doit apparaître entier sur l'étiquette. **Calibrer les étiquettes** fait mesurer l'espace entre étiquettes par l'imprimante (commande `GAPDETECT`). Les **Réglages avancés** couvrent l'espace entre étiquettes, la résolution (203/300 dpi), la noirceur, la vitesse, un décalage fin en mm, le retournement à 180° et l'inversion noir/blanc de certains modèles compatibles.
+
+L'impression directe passe par le serveur local : l'application doit être ouverte par le raccourci AutoGarage Pro (<http://localhost:5180>) sur le PC relié à l'imprimante. Sinon — ou en mode **Via Chrome** — l'impression passe par la fenêtre de Chrome comme avant. Une version publiée en ligne peut aussi piloter l'imprimante du PC si le serveur local tourne et que son adresse est autorisée : `AUTOGARAGE_ORIGINS=https://mon-garage.example.com` (liste séparée par des virgules) dans l'environnement du serveur.
+
+Le rendu des codes-barres est fait maison (`src/barcode.js`, sans dépendance) : SVG à l'écran, image point par point pour l'imprimante.
 
 Facture, bon de réparation et facture d'achat partagent une même mise en page (`docHead` / `PRINT_CSS` dans `src/store.js`) : identité du garage au-dessus du filet, titre centré sous le filet avec sa référence, encadrés client / véhicule, tableau à en-tête violet, cachet *Payé / Partiel / Impayé*, bloc de totaux. Le sens RTL est géré pour l'arabe.
 

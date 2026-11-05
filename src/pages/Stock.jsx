@@ -12,6 +12,8 @@ import {
   Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
 } from "../components/ui";
 import BarcodeScanner from "../components/BarcodeScanner";
+import { printLabelsAuto } from "../lib/labelPrinter";
+import { useLabelPrinter, LabelBitmapPreview, LabelPrinterStatus } from "../components/LabelPrinter";
 import StockAlerts from "../components/StockAlerts";
 
 /**
@@ -45,6 +47,8 @@ export function ProductForm({ editing, onClose, onCreated }) {
   const [labelRot, setLabelRotState] = useState(loadLabelRotation);
   const setLabelRot = (k) => { setLabelRotState(k); saveLabelRotation(k); };
   const [scanning, setScanning] = useState(false);
+  const lp = useLabelPrinter();
+  const [labelMsg, setLabelMsg] = useState(null);   // { tone, text, list? }
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const hasCode = !!String(form.barcode || "").trim();
@@ -58,22 +62,33 @@ export function ProductForm({ editing, onClose, onCreated }) {
     setNewCat(null);
   };
 
-  const printLabel = () =>
-    printLabels(
-      [{
-        name: form.name.trim() || t("Nom du produit"),
-        code: normalizeEan13(form.barcode || randomEan13()),
-        price: Number(form.salePrice) || editing?.salePrice || editing?.purchasePrice || 0,
-        copies,
-      }],
-      {
-        size: labelSize,
-        rotation: labelRot,
-        store: db.settings.name || "",
-        title: t("Étiquettes code-barres"),
-        dir: lang === "ar" ? "rtl" : "ltr",
+  const labelEntry = {
+    name: form.name.trim() || t("Nom du produit"),
+    code: normalizeEan13(form.barcode || randomEan13()),
+    price: Number(form.salePrice) || editing?.salePrice || editing?.purchasePrice || 0,
+  };
+  const labelOptions = {
+    size: labelSize,
+    rotation: labelRot,
+    store: db.settings.name || "",
+    title: t("Étiquettes code-barres"),
+    dir: lang === "ar" ? "rtl" : "ltr",
+  };
+
+  // Direct vers l'imprimante d'étiquettes si le serveur local la voit, sinon Chrome
+  const printLabel = () => {
+    const list = [{ ...labelEntry, copies }];
+    setLabelMsg(null);
+    printLabelsAuto(list, labelOptions).then((r) => {
+      if (r.ok && r.mode === "direct") {
+        setLabelMsg({ tone: "ok", text: `${r.count} ${t("étiquette(s) envoyée(s) à")} ${r.printer}` });
+      } else if (r.ok && r.fallback) {
+        setLabelMsg({ tone: "warning", text: `${t("Impression directe indisponible")} — ${t("impression par la fenêtre de Chrome.")}` });
+      } else if (!r.ok && r.message) {
+        setLabelMsg({ tone: "error", text: t(r.message), list });
       }
-    );
+    });
+  };
 
   /**
    * Read the barcode already printed on the box instead of generating one.
@@ -232,13 +247,13 @@ export function ProductForm({ editing, onClose, onCreated }) {
                   ? <Badge color="green"><Check size={11} /> {t("Code valide")}</Badge>
                   : <Badge color="orange">{t("Sera corrigé automatiquement")} → <span className="font-mono">{normalizeEan13(form.barcode)}</span></Badge>}
               </div>
-              <div className="mt-3 grid grid-cols-1 items-center gap-3 sm:grid-cols-[1fr_auto]">
-                <div className="rounded-xl bg-white p-2">
-                  <BarcodeLabel entry={{
-                    name: form.name || t("Nom du produit"),
-                    code: normalizeEan13(form.barcode),
-                    price: Number(form.salePrice) || editing?.salePrice || editing?.purchasePrice || 0,
-                  }} size={labelSize} />
+              <div className="mt-3 flex flex-col gap-3">
+                <div className="self-start rounded-xl bg-white p-2">
+                  {lp.direct ? (
+                    <LabelBitmapPreview entry={labelEntry} size={labelSize} store={db.settings.name || ""} settings={lp.settings} />
+                  ) : (
+                    <BarcodeLabel entry={labelEntry} size={labelSize} />
+                  )}
                 </div>
                 <div className="flex flex-wrap items-end gap-2">
                   <Field label={t("Format")}>
@@ -246,11 +261,13 @@ export function ProductForm({ editing, onClose, onCreated }) {
                       {Object.entries(LABEL_SIZES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
                     </Select>
                   </Field>
-                  <Field label={t("Rotation")}>
-                    <Select value={labelRot} onChange={(e) => setLabelRot(e.target.value)} className="input w-24">
-                      {Object.entries(LABEL_ROTATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-                    </Select>
-                  </Field>
+                  {!lp.direct && (
+                    <Field label={t("Rotation")}>
+                      <Select value={labelRot} onChange={(e) => setLabelRot(e.target.value)} className="input w-24">
+                        {Object.entries(LABEL_ROTATIONS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                      </Select>
+                    </Field>
+                  )}
                   <Field label={t("Copies")}>
                     <Input type="number" min="1" max="200" value={copies}
                       onChange={(e) => setCopies(Math.max(1, Math.min(200, Number(e.target.value) || 1)))}
@@ -258,6 +275,21 @@ export function ProductForm({ editing, onClose, onCreated }) {
                   </Field>
                   <Btn variant="soft" icon={Printer} onClick={printLabel}>{t("Imprimer l'étiquette")}</Btn>
                 </div>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+                <LabelPrinterStatus lp={lp} />
+                {labelMsg && (
+                  <span className={`text-xs font-semibold ${
+                    labelMsg.tone === "ok" ? "text-emerald-700" : labelMsg.tone === "warning" ? "text-amber-700" : "text-red-600"}`}>
+                    {labelMsg.text}
+                  </span>
+                )}
+                {labelMsg?.list && (
+                  <button type="button" onClick={() => { printLabels(labelMsg.list, labelOptions); setLabelMsg(null); }}
+                    className="cursor-pointer text-xs font-bold text-primary-600 underline hover:text-primary-800">
+                    {t("Imprimer via Chrome")}
+                  </button>
+                )}
               </div>
             </>
           )}

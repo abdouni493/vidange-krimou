@@ -73,17 +73,28 @@ const RIGHT_X = LEFT_X + 42 + 5; // after the left group + centre guard
 // Guards run taller than the data bars, as on a real label
 const GUARDS = new Set([0, 1, 2, 45, 46, 47, 48, 49, 92, 93, 94]);
 
-// Returns a standalone <svg> string — injected via dangerouslySetInnerHTML in the
-// app and concatenated straight into the print document.
-export function ean13Svg(value, { height = 70, showText = true, color = "#111827" } = {}) {
+/**
+ * The 95 modules of an EAN-13 symbol ("1" = dark bar), guards included.
+ * Shared by the SVG preview and the printer bitmap, so both draw the same bars.
+ */
+export function ean13Bits(value) {
   const code = normalizeEan13(value);
   const parity = PARITY[Number(code[0])];
-
   let bits = "101";
   for (let i = 0; i < 6; i++) bits += (parity[i] === "L" ? L : G)[Number(code[i + 1])];
   bits += "01010";
   for (let i = 0; i < 6; i++) bits += R[Number(code[i + 7])];
   bits += "101";
+  return { code, bits };
+}
+
+/** Module indexes of the start, centre and end guards (drawn taller). */
+export const EAN13_GUARDS = GUARDS;
+
+// Returns a standalone <svg> string — injected via dangerouslySetInnerHTML in the
+// app and concatenated straight into the print document.
+export function ean13Svg(value, { height = 70, showText = true, color = "#111827" } = {}) {
+  const { code, bits } = ean13Bits(value);
 
   const guardExtra = showText ? 8 : 0;
   const textSize = 11;
@@ -123,7 +134,9 @@ export function ean13Svg(value, { height = 70, showText = true, color = "#111827
 // so the driver feeds one label per page — no A4 sheet, no margins, no scaling.
 export const LABEL_SIZES = {
   s40x20: { w: 40, h: 20, name: 6, price: 7.5, store: 4.5, label: "40 × 20 mm" },
+  s30x20: { w: 30, h: 20, name: 5.5, price: 7, store: 4.5, label: "30 × 20 mm" },
   s40x30: { w: 40, h: 30, name: 6.5, price: 8.5, store: 5, label: "40 × 30 mm" },
+  s50x25: { w: 50, h: 25, name: 7, price: 9, store: 5.5, label: "50 × 25 mm" },
   s50x30: { w: 50, h: 30, name: 7.5, price: 9.5, store: 6, label: "50 × 30 mm" },
   s58x40: { w: 58, h: 40, name: 8.5, price: 11, store: 6.5, label: "58 × 40 mm" },
   s38x25: { w: 38, h: 25, name: 6, price: 7.5, store: 5, label: "38 × 25 mm" },

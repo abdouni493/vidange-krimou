@@ -346,11 +346,16 @@ export function BarcodeLabel({ entry, opts = DEFAULT_LABEL_OPTS, size }) {
         <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{db.settings.name}</p>
       )}
       {opts.showName && (
-        <p className="line-clamp-2 text-center text-[11px] font-bold leading-tight text-primary-900">
+        <p className={`${S && S.h <= 25 ? "line-clamp-1" : "line-clamp-2"} text-center text-[11px] font-bold leading-tight text-primary-900`}>
           {entry.name || "—"}
         </p>
       )}
-      <div className="w-full max-w-[210px]" dangerouslySetInnerHTML={{ __html: svg }} />
+      {/* At a fixed label ratio the bars shrink to the height left over, so the
+          digits under them are never cut off. */}
+      <div className={S
+        ? "flex min-h-0 w-full flex-1 items-center justify-center [&>svg]:h-full [&>svg]:w-auto [&>svg]:max-w-full"
+        : "w-full max-w-[210px]"}
+        dangerouslySetInnerHTML={{ __html: svg }} />
       {opts.showPrice && Number(entry.price) > 0 && (
         <p className="font-mono text-xs font-extrabold text-primary-900">{fmtMoney(entry.price)}</p>
       )}

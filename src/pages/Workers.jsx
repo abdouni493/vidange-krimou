@@ -17,7 +17,7 @@ const ACTION_LABELS = {
   view: "Voir", create: "Créer", edit: "Modifier", delete: "Supprimer",
   pay: "Payer dette", finalize: "Finaliser", cancel: "Annuler", print: "Imprimer",
   history: "Historique", permissions: "Permissions", advance: "Acompte",
-  absence: "Absence", payment: "Paiement",
+  absence: "Absence", payment: "Paiement", correct: "Corriger le stock",
 };
 
 // ===== Create / edit worker wizard =====

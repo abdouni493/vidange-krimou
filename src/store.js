@@ -92,7 +92,7 @@ export const presetRange = (preset) => {
 
 // ---- permissions catalog ----
 export const PAGES = [
-  "dashboard", "repairs", "services", "stock", "barcodes", "purchases", "pos",
+  "dashboard", "repairs", "services", "stock", "inventaire", "barcodes", "purchases", "pos",
   "sales", "clients", "suppliers", "workers", "expenses", "caisse", "reports",
   "analytics", "settings",
 ];
@@ -102,6 +102,7 @@ export const PAGE_ACTIONS = {
   repairs: ["view", "create", "edit", "delete", "pay", "finalize", "cancel"],
   services: ["view", "create", "edit", "delete"],
   stock: ["view", "create", "edit", "delete"],
+  inventaire: ["view", "create", "edit", "delete", "correct", "print"],
   barcodes: ["view", "create", "delete", "print"],
   purchases: ["view", "create", "edit", "delete", "pay", "print"],
   pos: ["view", "create"],
@@ -122,7 +123,7 @@ export const PAGE_ACTIONS = {
 export const COLLECTIONS = [
   "users", "clients", "services", "categories", "products", "suppliers",
   "purchases", "sales", "repairs", "roles", "workers", "expenseCategories",
-  "expenses", "caisseCategories", "caisse", "barcodes",
+  "expenses", "caisseCategories", "caisse", "barcodes", "inventaires",
 ];
 
 export function emptyDB() {

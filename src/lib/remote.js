@@ -12,7 +12,7 @@
 
 import { supabase } from "./supabase.js";
 import {
-  COLLECTIONS, JSON_COLS, BOOL_COLS, NUM_COLS, SETTINGS_COLS, SETTINGS_JSON,
+  COLLECTIONS, JSON_COLS, JSON_EMPTY, BOOL_COLS, NUM_COLS, SETTINGS_COLS, SETTINGS_JSON,
 } from "./mapping.js";
 
 const PAGE = 1000;          // PostgREST plafonne une réponse à 1000 lignes
@@ -37,7 +37,7 @@ const fail = (context, error) => {
 
 const readValue = (col, v) => {
   if (col === "created_at") return v ? String(v).slice(0, 10) : "";
-  if (JSON_COLS.has(col)) return v ?? (col === "settled_repair_ids" ? [] : {});
+  if (JSON_COLS.has(col)) return v ?? (col in JSON_EMPTY ? JSON_EMPTY[col] : {});
   if (BOOL_COLS.has(col)) return !!v;
   if (NUM_COLS.has(col)) return Number(v) || 0;
   return v ?? "";
@@ -45,7 +45,7 @@ const readValue = (col, v) => {
 
 const writeValue = (col, v) => {
   if (col === "created_at") return v || todayISO();
-  if (JSON_COLS.has(col)) return v ?? (col === "settled_repair_ids" ? [] : {});
+  if (JSON_COLS.has(col)) return v ?? (col in JSON_EMPTY ? JSON_EMPTY[col] : {});
   if (BOOL_COLS.has(col)) return !!v;
   if (NUM_COLS.has(col)) return Number(v) || 0;
   if (v === undefined || v === "") return col === "id" ? v : null;
@@ -142,7 +142,8 @@ export async function fetchAll() {
   const doc = {};
 
   // Les collections sont indépendantes : on les lit en parallèle.
-  const parents = await Promise.all(COLLECTIONS.map((s) => selectAll(s.table)));
+  const parents = await Promise.all(COLLECTIONS.map((s) =>
+    s.optional ? selectAll(s.table).catch(() => []) : selectAll(s.table)));
 
   const childJobs = [];
   COLLECTIONS.forEach((spec, i) => {
@@ -374,7 +375,7 @@ export async function pushAll(prevDoc, nextDoc) {
 export async function resetAll() {
   for (const spec of [...COLLECTIONS].reverse()) {
     const { error } = await supabase.from(spec.table).delete().not("id", "is", null);
-    if (error) fail(`Réinitialisation de « ${spec.table} »`, error);
+    if (error && !spec.optional) fail(`Réinitialisation de « ${spec.table} »`, error);
   }
   await supabase.from("counters").upsert({ id: 1, purchase: 1, sale: 1 }, { onConflict: "id" });
   const blank = { id: 1, updated_at: new Date().toISOString() };

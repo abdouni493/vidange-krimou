@@ -342,6 +342,27 @@ create table if not exists public.barcodes (
 );
 create index if not exists idx_barcodes_code on public.barcodes(code);
 
+-- ---- Interface « Inventaire » -------------------------------------------
+create table if not exists public.inventaires (
+  id            text primary key,
+  ref           text not null default '',
+  date          date not null default current_date,
+  status        text not null default 'draft'
+                check (status in ('draft', 'completed', 'compared', 'corrected')),
+  lines         jsonb not null default '[]'::jsonb,
+  notes         text,
+  created_by    text,
+  completed_at  timestamptz,
+  comparison    jsonb,
+  corrected_at  timestamptz,
+  corrected_by  text,
+  backup        jsonb,
+  position      integer not null default 0,
+  created_at    timestamptz not null default now()
+);
+create index if not exists idx_inventaires_date   on public.inventaires(date);
+create index if not exists idx_inventaires_status on public.inventaires(status);
+
 -- ---- Interface « Achats » -----------------------------------------------
 create table if not exists public.purchases (
   id          text primary key,
@@ -777,6 +798,7 @@ begin
       ('categories',          'stock',     array['create'],                    array['edit'],                                array['delete']),
       ('roles',               'workers',   array['create'],                    array['edit'],                                array['delete']),
       ('barcodes',            'barcodes',  array['create'],                    array['edit'],                                array['delete']),
+      ('inventaires',         'inventaire',array['create'],                    array['create', 'edit', 'correct'],           array['delete']),
       ('expense_categories',  'expenses',  array['create'],                    array['edit'],                                array['delete']),
       ('expenses',            'expenses',  array['create'],                    array['edit'],                                array['delete']),
       ('caisse_categories',   'caisse',    array['create'],                    array['edit'],                                array['delete']),
@@ -837,6 +859,7 @@ create policy products_update on public.products
     or public.has_any_perm('sales',     array['edit', 'delete'])
     or public.has_any_perm('purchases', array['create', 'edit', 'delete'])
     or public.has_any_perm('repairs',   array['create', 'edit', 'finalize', 'cancel', 'delete'])
+    or public.has_any_perm('inventaire', array['correct'])
   )
   with check (
     public.has_any_perm('stock',     array['edit', 'create'])
@@ -844,6 +867,7 @@ create policy products_update on public.products
     or public.has_any_perm('sales',     array['edit', 'delete'])
     or public.has_any_perm('purchases', array['create', 'edit', 'delete'])
     or public.has_any_perm('repairs',   array['create', 'edit', 'finalize', 'cancel', 'delete'])
+    or public.has_any_perm('inventaire', array['correct'])
   );
 
 create policy products_delete on public.products
@@ -1044,7 +1068,7 @@ declare tbl text;
 begin
   for tbl in
     select unnest(array[
-      'clients','suppliers','services','categories','products','barcodes',
+      'clients','suppliers','services','categories','products','barcodes','inventaires',
       'purchases','purchase_items','purchase_payments',
       'sales','sale_items','sale_payments',
       'repairs','repair_services','repair_products','repair_workers','repair_payments',

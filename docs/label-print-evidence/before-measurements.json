@@ -1,0 +1,120 @@
+[
+  {
+    "case": "fresh-r90",
+    "css": "\n    @page { size: 20mm 40mm; margin: 0; }\n    * { box-sizing: border-box; margin: 0; padding: 0; }\n    html, body { width: 20mm; background: #fff; }\n    .pg { width: 20mm; height: 40mm; overflow: hidden; position: relative;\n          page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }\n    .pg:last-child { page-break-after: auto; break-after: auto; }\n    body { font-family: Arial, 'Segoe UI', 'Tajawal', sans-serif; color: #000;\n           -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n    .lbl {\n      width: 40mm; height: 20mm; padding: 0.8mm 1.5mm; overflow: hidden;\n      display: flex; flex-direction: column; align-items: center; justify-content: space-between;\n      gap: 0.3mm; position: absolute; top: 0; left: 0; transform-origin: top left; transform: translateX(20mm) rotate(90deg);\n      \n    }\n    .lbl-s { font-size: 4.5pt; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1; }\n    .lbl-n { width: 100%; font-size: 6pt; font-weight: 700; text-align: center; line-height: 1.1;\n             display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;\n             word-break: break-word; }\n    .lbl-b { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }\n    .lbl-b svg { width: 100%; height: 100%; display: block; }\n    .lbl-p { font-size: 7.5pt; font-weight: 800; font-family: Arial, sans-serif; line-height: 1; white-space: nowrap; }\n    @media screen {\n      html, body { width: auto; } body { background: #e5e7eb; padding: 10px; }\n      .pg { background: #fff; margin: 0 auto 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }\n    }\n  ",
+    "page": [
+      {
+        "w": 75.578125,
+        "h": 151.171875
+      },
+      {
+        "w": 75.578125,
+        "h": 151.171875
+      },
+      {
+        "w": 75.578125,
+        "h": 151.171875
+      }
+    ],
+    "label": [
+      {
+        "transform": "matrix(0, 1, -1, 0, 75.5906, 0)",
+        "rect": {
+          "x": 0.01242828369140625,
+          "y": 0,
+          "width": 75.578125,
+          "height": 151.171875,
+          "top": 0,
+          "right": 75.5905532836914,
+          "bottom": 151.171875,
+          "left": 0.01242828369140625
+        }
+      },
+      {
+        "transform": "matrix(0, 1, -1, 0, 75.5906, 0)",
+        "rect": {
+          "x": 0.01242828369140625,
+          "y": 151.171875,
+          "width": 75.578125,
+          "height": 151.171875,
+          "top": 151.171875,
+          "right": 75.5905532836914,
+          "bottom": 302.34375,
+          "left": 0.01242828369140625
+        }
+      },
+      {
+        "transform": "matrix(0, 1, -1, 0, 75.5906, 0)",
+        "rect": {
+          "x": 0.01242828369140625,
+          "y": 302.34375,
+          "width": 75.578125,
+          "height": 151.171875,
+          "top": 302.34375,
+          "right": 75.5905532836914,
+          "bottom": 453.515625,
+          "left": 0.01242828369140625
+        }
+      }
+    ]
+  },
+  {
+    "case": "r0",
+    "css": "\n    @page { size: 40mm 20mm; margin: 0; }\n    * { box-sizing: border-box; margin: 0; padding: 0; }\n    html, body { width: 40mm; background: #fff; }\n    .pg { width: 40mm; height: 20mm; overflow: hidden; position: relative;\n          page-break-after: always; break-after: page; page-break-inside: avoid; break-inside: avoid; }\n    .pg:last-child { page-break-after: auto; break-after: auto; }\n    body { font-family: Arial, 'Segoe UI', 'Tajawal', sans-serif; color: #000;\n           -webkit-print-color-adjust: exact; print-color-adjust: exact; }\n    .lbl {\n      width: 40mm; height: 20mm; padding: 0.8mm 1.5mm; overflow: hidden;\n      display: flex; flex-direction: column; align-items: center; justify-content: space-between;\n      gap: 0.3mm; position: absolute; top: 0; left: 0; transform-origin: top left; transform: none;\n      \n    }\n    .lbl-s { font-size: 4.5pt; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1; }\n    .lbl-n { width: 100%; font-size: 6pt; font-weight: 700; text-align: center; line-height: 1.1;\n             display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;\n             word-break: break-word; }\n    .lbl-b { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }\n    .lbl-b svg { width: 100%; height: 100%; display: block; }\n    .lbl-p { font-size: 7.5pt; font-weight: 800; font-family: Arial, sans-serif; line-height: 1; white-space: nowrap; }\n    @media screen {\n      html, body { width: auto; } body { background: #e5e7eb; padding: 10px; }\n      .pg { background: #fff; margin: 0 auto 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }\n    }\n  ",
+    "page": [
+      {
+        "w": 151.171875,
+        "h": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125
+      }
+    ],
+    "label": [
+      {
+        "transform": "none",
+        "rect": {
+          "x": 0,
+          "y": 0,
+          "width": 151.171875,
+          "height": 75.578125,
+          "top": 0,
+          "right": 151.171875,
+          "bottom": 75.578125,
+          "left": 0
+        }
+      },
+      {
+        "transform": "none",
+        "rect": {
+          "x": 0,
+          "y": 75.578125,
+          "width": 151.171875,
+          "height": 75.578125,
+          "top": 75.578125,
+          "right": 151.171875,
+          "bottom": 151.15625,
+          "left": 0
+        }
+      },
+      {
+        "transform": "none",
+        "rect": {
+          "x": 0,
+          "y": 151.15625,
+          "width": 151.171875,
+          "height": 75.578125,
+          "top": 151.15625,
+          "right": 151.171875,
+          "bottom": 226.734375,
+          "left": 0
+        }
+      }
+    ]
+  }
+]

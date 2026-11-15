@@ -109,7 +109,7 @@ export default function Barcodes() {
   // Direct vers l'imprimante d'étiquettes quand le serveur local la voit,
   // sinon par la fenêtre d'impression de Chrome.
   const printOptions = {
-    size, rotation, opts,
+    size, rotation, opts, dpi: lp.settings.dpi,
     store: db.settings.name || "",
     title: t("Étiquettes code-barres"),
     dir: lang === "ar" ? "rtl" : "ltr",
@@ -323,7 +323,7 @@ export default function Barcodes() {
                       </div>
 
                       <div className="bg-primary-50/40 px-4 py-3">
-                        <LabelPreview entry={b} opts={opts} />
+                        <LabelPreview entry={b} opts={opts} size={size} />
                       </div>
 
                       <div className="flex items-center justify-between gap-3 px-4 py-3">

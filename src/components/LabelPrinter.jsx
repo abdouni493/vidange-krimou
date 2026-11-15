@@ -4,17 +4,18 @@
 // l'imprimante : l'application la voit-elle ? sur quelle taille d'étiquette
 // imprime-t-on ? et à quoi ressemblera exactement l'étiquette (point par point) ?
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
   Printer, RefreshCw, CheckCircle2, AlertTriangle, Loader2, Crosshair, SlidersHorizontal, X,
 } from "lucide-react";
 import { useApp } from "../context";
-import { LABEL_SIZES, LABEL_ROTATIONS, DEFAULT_LABEL_OPTS } from "../barcode";
+import { LABEL_SIZES, LABEL_ROTATIONS, DEFAULT_LABEL_OPTS, CHROME_PRINT_HINT } from "../barcode";
 import {
   loadPrinterSettings, savePrinterSettings, onPrinterSettings, cachedAgent, detectAgent,
-  pickPrinter, renderLabelCanvas, canvasToDots, labelDots, printTestLabel, calibratePrinter,
+  pickPrinter, printTestLabel, calibratePrinter,
 } from "../lib/labelPrinter";
+import PhysicalLabelPreview from "./PhysicalLabelPreview";
 import { Btn, IconBtn, Field, Input, Select, Seg } from "./ui";
 
 /** Réglages + état du serveur local, partagés entre tous les écrans ouverts. */
@@ -45,33 +46,7 @@ export function useLabelPrinter() {
 
 /** L'étiquette telle que l'imprimante la recevra : chaque pixel = un point. */
 export function LabelBitmapPreview({ entry, size, opts = DEFAULT_LABEL_OPTS, store = "", settings }) {
-  const ref = useRef(null);
-  const S = LABEL_SIZES[size] || LABEL_SIZES.s40x20;
-  const { W } = labelDots(S, settings.dpi);
-  const key = JSON.stringify([entry?.name, entry?.code, entry?.price, size, opts, store,
-    settings.dpi, settings.offsetX, settings.offsetY]);
-
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas || !entry) return;
-    const { W: w, H: h, dots } = canvasToDots(renderLabelCanvas(entry, { size, opts, store, settings }));
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    const img = ctx.createImageData(w, h);
-    for (let i = 0; i < dots.length; i++) {
-      const v = dots[i] ? 17 : 255;
-      img.data[i * 4] = v; img.data[i * 4 + 1] = v; img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255;
-    }
-    ctx.putImageData(img, 0, 0);
-    // `key` résume tout ce qui change le dessin (texte, format, résolution, décalages)
-  }, [key]);
-
-  return (
-    <canvas ref={ref} aria-label="Aperçu de l'étiquette"
-      className="block rounded-md bg-white shadow-sm ring-1 ring-slate-300"
-      style={{ width: W, maxWidth: "100%", imageRendering: "pixelated" }} />
-  );
+  return <PhysicalLabelPreview entry={entry} size={size} opts={opts} store={store} settings={settings} />;
 }
 
 /** Bandeau d'erreur / d'avertissement d'impression, avec repli sur Chrome. */
@@ -208,7 +183,7 @@ export function LabelPrinterPanel({ lp, size, onSizeChange, rotation, onRotation
               options={Object.entries(LABEL_ROTATIONS).map(([k, v]) => ({ value: k, label: v }))} />
           </div>
           <p className="text-[11.5px] leading-snug text-slate-400">
-            {t("Dans la fenêtre d'impression de Chrome : même format de papier que l'étiquette, Marges « Aucune », Échelle « Par défaut », en-têtes et pieds de page décochés.")}
+            {t(CHROME_PRINT_HINT)}
           </p>
         </div>
       )}

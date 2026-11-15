@@ -1,0 +1,1634 @@
+[
+  {
+    "name": "fresh",
+    "options": {},
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Liqui Moly 10W40 A3/B4 5L",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Liqui Moly 10W40 A3/B4 5L"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Filtre",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Filtre"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 51,
+          "y0": 12,
+          "x1": 269,
+          "y1": 145
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 51,
+          "y0": 12,
+          "x1": 269,
+          "y1": 145
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 13,
+          "x1": 258,
+          "y1": 145
+        }
+      }
+    ],
+    "pageRule": "@page { size: 40mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:52 2026 UTC\nModDate:         Sun Nov 15 11:41:52 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       113.04 x 56.88 pts\nPage rot:        0\nFile size:       16693 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "r0",
+    "options": {
+      "rotation": "r0"
+    },
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Liqui Moly 10W40 A3/B4 5L",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Liqui Moly 10W40 A3/B4 5L"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Filtre",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Filtre"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 51,
+          "y0": 12,
+          "x1": 269,
+          "y1": 145
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 51,
+          "y0": 12,
+          "x1": 269,
+          "y1": 145
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 13,
+          "x1": 258,
+          "y1": 145
+        }
+      }
+    ],
+    "pageRule": "@page { size: 40mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:52 2026 UTC\nModDate:         Sun Nov 15 11:41:52 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       113.04 x 56.88 pts\nPage rot:        0\nFile size:       16693 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "r90",
+    "options": {
+      "rotation": "r90"
+    },
+    "rotation": "r90",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Liqui Moly 10W40 A3/B4 5L",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Liqui Moly 10W40 A3/B4 5L"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Filtre",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Filtre"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pageRule": "@page { size: 20mm 40mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 75.578125,
+        "h": 151.171875,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 75.578125,
+        "h": 151.171875,
+        "x": 0,
+        "y": 151.171875
+      },
+      {
+        "w": 75.578125,
+        "h": 151.171875,
+        "x": 0,
+        "y": 302.34375
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 75.578125,
+          "h": 151.171875,
+          "x": 0.01242828369140625,
+          "y": 0
+        },
+        "transform": "matrix(0, 1, -1, 0, 75.5906, 0)"
+      },
+      {
+        "rect": {
+          "w": 75.578125,
+          "h": 151.171875,
+          "x": 0.01242828369140625,
+          "y": 151.171875
+        },
+        "transform": "matrix(0, 1, -1, 0, 75.5906, 0)"
+      },
+      {
+        "rect": {
+          "w": 75.578125,
+          "h": 151.171875,
+          "x": 0.01242828369140625,
+          "y": 302.34375
+        },
+        "transform": "matrix(0, 1, -1, 0, 75.5906, 0)"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:53 2026 UTC\nModDate:         Sun Nov 15 11:41:53 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       56.88 x 113.04 pts\nPage rot:        0\nFile size:       16712 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "r270",
+    "options": {
+      "rotation": "r270"
+    },
+    "rotation": "r270",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Liqui Moly 10W40 A3/B4 5L",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Liqui Moly 10W40 A3/B4 5L"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Filtre",
+              "px": 17,
+              "y": 6,
+              "h": 26,
+              "visibleText": "Filtre"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 36,
+            "w": 190,
+            "h": 54,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pageRule": "@page { size: 20mm 40mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 75.578125,
+        "h": 151.171875,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 75.578125,
+        "h": 151.171875,
+        "x": 0,
+        "y": 151.171875
+      },
+      {
+        "w": 75.578125,
+        "h": 151.171875,
+        "x": 0,
+        "y": 302.34375
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 75.578125,
+          "h": 151.171875,
+          "x": 0,
+          "y": 0.0092315673828125
+        },
+        "transform": "matrix(0, -1, 1, 0, 0, 151.181)"
+      },
+      {
+        "rect": {
+          "w": 75.578125,
+          "h": 151.17185974121094,
+          "x": 0,
+          "y": 151.1811065673828
+        },
+        "transform": "matrix(0, -1, 1, 0, 0, 151.181)"
+      },
+      {
+        "rect": {
+          "w": 75.578125,
+          "h": 151.171875,
+          "x": 0,
+          "y": 302.35296630859375
+        },
+        "transform": "matrix(0, -1, 1, 0, 0, 151.181)"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:53 2026 UTC\nModDate:         Sun Nov 15 11:41:53 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       56.88 x 113.04 pts\nPage rot:        0\nFile size:       16747 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "300dpi",
+    "options": {
+      "dpi": 300
+    },
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 480,
+          "H": 240,
+          "dpm": 12,
+          "margin": 10,
+          "gap": 6,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Liqui Moly 10W40 A3/B4 5L",
+              "px": 25,
+              "y": 10,
+              "h": 38,
+              "visibleText": "Liqui Moly 10W40 A3/B4 5L"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 25,
+              "y": 142,
+              "h": 35,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 31,
+              "y": 183,
+              "h": 47,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 58,
+            "y": 54,
+            "w": 380,
+            "h": 82,
+            "module": 4,
+            "quietLeft": 44,
+            "quietRight": 28,
+            "blockX": 14,
+            "blockW": 452
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 480,
+          "H": 240,
+          "dpm": 12,
+          "margin": 10,
+          "gap": 6,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Filtre",
+              "px": 25,
+              "y": 10,
+              "h": 38,
+              "visibleText": "Filtre"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 25,
+              "y": 142,
+              "h": 35,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 31,
+              "y": 183,
+              "h": 47,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 58,
+            "y": 54,
+            "w": 380,
+            "h": 82,
+            "module": 4,
+            "quietLeft": 44,
+            "quietRight": 28,
+            "blockX": 14,
+            "blockW": 452
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 479,
+        "height": 241,
+        "inkBounds": {
+          "x0": 58,
+          "y0": 17,
+          "x1": 437,
+          "y1": 219
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 479,
+        "height": 241,
+        "inkBounds": {
+          "x0": 58,
+          "y0": 17,
+          "x1": 437,
+          "y1": 219
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 479,
+        "height": 241,
+        "inkBounds": {
+          "x0": 58,
+          "y0": 20,
+          "x1": 437,
+          "y1": 219
+        }
+      }
+    ],
+    "pageRule": "@page { size: 40mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:53 2026 UTC\nModDate:         Sun Nov 15 11:41:53 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       113.04 x 56.88 pts\nPage rot:        0\nFile size:       26151 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "no-name",
+    "options": {
+      "opts": {
+        "showName": false,
+        "showCode": true,
+        "showPrice": false,
+        "showStore": false
+      }
+    },
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 130,
+              "h": 24,
+              "visibleText": "4100410231707"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 6,
+            "w": 190,
+            "h": 120,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 130,
+              "h": 24,
+              "visibleText": "0123456789012"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 6,
+            "w": 190,
+            "h": 120,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 6,
+          "x1": 258,
+          "y1": 148
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 6,
+          "x1": 258,
+          "y1": 148
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 6,
+          "x1": 258,
+          "y1": 148
+        }
+      }
+    ],
+    "pageRule": "@page { size: 40mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:53 2026 UTC\nModDate:         Sun Nov 15 11:41:53 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       113.04 x 56.88 pts\nPage rot:        0\nFile size:       15221 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "30x20",
+    "options": {
+      "size": "s30x20"
+    },
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 240,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Liqui Moly 10W40 A3/B4 5L",
+              "px": 16,
+              "y": 6,
+              "h": 24,
+              "visibleText": "Liqui Moly 10W40 A3/B4 5L"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 96,
+              "h": 24,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 20,
+              "y": 124,
+              "h": 30,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 29,
+            "y": 34,
+            "w": 190,
+            "h": 58,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 7,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 240,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "name",
+              "text": "Filtre",
+              "px": 16,
+              "y": 6,
+              "h": 24,
+              "visibleText": "Filtre"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 96,
+              "h": 24,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 20,
+              "y": 124,
+              "h": 30,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 29,
+            "y": 34,
+            "w": 190,
+            "h": 58,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 7,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 240,
+        "height": 161,
+        "inkBounds": {
+          "x0": 17,
+          "y0": 11,
+          "x1": 222,
+          "y1": 146
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 240,
+        "height": 161,
+        "inkBounds": {
+          "x0": 17,
+          "y0": 11,
+          "x1": 222,
+          "y1": 146
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 240,
+        "height": 161,
+        "inkBounds": {
+          "x0": 29,
+          "y0": 12,
+          "x1": 218,
+          "y1": 146
+        }
+      }
+    ],
+    "pageRule": "@page { size: 30mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 113.375,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 113.375,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 113.375,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 113.375,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 113.375,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 113.375,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:54 2026 UTC\nModDate:         Sun Nov 15 11:41:54 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       84.96 x 56.88 pts\nPage rot:        0\nFile size:       16404 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "all-fields",
+    "options": {
+      "opts": {
+        "showName": true,
+        "showCode": true,
+        "showPrice": true,
+        "showStore": true
+      },
+      "store": "Garage Étoile"
+    },
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "store",
+              "text": "Garage Étoile",
+              "px": 13,
+              "y": 6,
+              "h": 20,
+              "visibleText": "Garage Étoile"
+            },
+            {
+              "kind": "name",
+              "text": "Écrou étanchéité à tête épaulée pour moteur professionnel",
+              "px": 17,
+              "y": 30,
+              "h": 26,
+              "visibleText": "Écrou étanchéité à tête épaulée pou…"
+            },
+            {
+              "kind": "digits",
+              "text": "4100410231707",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "4100410231707"
+            },
+            {
+              "kind": "price",
+              "text": "6 750 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "6 750 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 60,
+            "w": 190,
+            "h": 30,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "store",
+              "text": "Garage Étoile",
+              "px": 13,
+              "y": 6,
+              "h": 20,
+              "visibleText": "Garage Étoile"
+            },
+            {
+              "kind": "name",
+              "text": "زيت المحرك الأصلي",
+              "px": 17,
+              "y": 30,
+              "h": 26,
+              "visibleText": "زيت المحرك الأصلي"
+            },
+            {
+              "kind": "digits",
+              "text": "0123456789012",
+              "px": 17,
+              "y": 94,
+              "h": 24,
+              "visibleText": "0123456789012"
+            },
+            {
+              "kind": "price",
+              "text": "650 DA",
+              "px": 21,
+              "y": 122,
+              "h": 32,
+              "visibleText": "650 DA"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 60,
+            "w": 190,
+            "h": 30,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 8,
+          "y0": 9,
+          "x1": 311,
+          "y1": 145
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 8,
+          "y0": 9,
+          "x1": 311,
+          "y1": 145
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 9,
+          "x1": 258,
+          "y1": 145
+        }
+      }
+    ],
+    "pageRule": "@page { size: 40mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:54 2026 UTC\nModDate:         Sun Nov 15 11:41:54 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       113.04 x 56.88 pts\nPage rot:        0\nFile size:       19205 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  },
+  {
+    "name": "variants",
+    "options": {
+      "opts": {
+        "showName": true,
+        "showCode": false,
+        "showPrice": false,
+        "showStore": true
+      },
+      "store": "Garage Étoile"
+    },
+    "rotation": "r0",
+    "geometry": [
+      {
+        "code": "4100410231707",
+        "decoded": "4100410231707",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "store",
+              "text": "Garage Étoile",
+              "px": 13,
+              "y": 6,
+              "h": 20,
+              "visibleText": "Garage Étoile"
+            },
+            {
+              "kind": "name",
+              "text": "Écrou étanchéité à tête épaulée",
+              "px": 17,
+              "y": 30,
+              "h": 26,
+              "visibleText": "Écrou étanchéité à tête épaulée"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 60,
+            "w": 190,
+            "h": 94,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      },
+      {
+        "code": "0123456789012",
+        "decoded": "0123456789012",
+        "layout": {
+          "W": 320,
+          "H": 160,
+          "dpm": 8,
+          "margin": 6,
+          "gap": 4,
+          "rows": [
+            {
+              "kind": "store",
+              "text": "Garage Étoile",
+              "px": 13,
+              "y": 6,
+              "h": 20,
+              "visibleText": "Garage Étoile"
+            },
+            {
+              "kind": "name",
+              "text": "زيت المحرك الأصلي",
+              "px": 17,
+              "y": 30,
+              "h": 26,
+              "visibleText": "زيت المحرك الأصلي"
+            }
+          ],
+          "bars": {
+            "x": 69,
+            "y": 60,
+            "w": 190,
+            "h": 94,
+            "module": 2,
+            "quietLeft": 22,
+            "quietRight": 14,
+            "blockX": 47,
+            "blockW": 226
+          }
+        }
+      }
+    ],
+    "pdfPages": [
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 34,
+          "y0": 9,
+          "x1": 285,
+          "y1": 154
+        }
+      },
+      {
+        "text": "4100410231707",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 34,
+          "y0": 9,
+          "x1": 285,
+          "y1": 154
+        }
+      },
+      {
+        "text": "0123456789012",
+        "width": 320,
+        "height": 161,
+        "inkBounds": {
+          "x0": 69,
+          "y0": 9,
+          "x1": 258,
+          "y1": 154
+        }
+      }
+    ],
+    "pageRule": "@page { size: 40mm 20mm; margin: 0px; }",
+    "pages": [
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 0
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 75.578125
+      },
+      {
+        "w": 151.171875,
+        "h": 75.578125,
+        "x": 0,
+        "y": 151.15625
+      }
+    ],
+    "labels": [
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 0
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 75.578125
+        },
+        "transform": "none"
+      },
+      {
+        "rect": {
+          "w": 151.171875,
+          "h": 75.578125,
+          "x": 0,
+          "y": 151.15625
+        },
+        "transform": "none"
+      }
+    ],
+    "pdfInfo": "Title:           Étiquettes code-barres\nCreator:         Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/156.0.0.0 Safari/537.36\nProducer:        Skia/PDF m156\nCreationDate:    Sun Nov 15 11:41:54 2026 UTC\nModDate:         Sun Nov 15 11:41:54 2026 UTC\nCustom Metadata: no\nMetadata Stream: no\nTagged:          no\nUserProperties:  no\nSuspects:        no\nForm:            none\nJavaScript:      no\nPages:           3\nEncrypted:       no\nPage size:       113.04 x 56.88 pts\nPage rot:        0\nFile size:       17093 bytes\nOptimized:       no\nPDF version:     1.4\n"
+  }
+]

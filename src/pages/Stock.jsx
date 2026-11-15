@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { useApp } from "../context";
 import { uid, todayISO, fmtMoney, fmtDate, findProductByCode } from "../store";
-import { randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels, loadLabelSize, saveLabelSize, LABEL_SIZES, LABEL_ROTATIONS, loadLabelRotation, saveLabelRotation } from "../barcode";
+import { CHROME_PRINT_HINT, randomEan13, normalizeEan13, isValidEan13, scanToEan13, printLabels, loadLabelSize, saveLabelSize, LABEL_SIZES, LABEL_ROTATIONS, loadLabelRotation, saveLabelRotation } from "../barcode";
 import {
   Btn, IconBtn, Modal, Confirm, Field, Input, Textarea, Select, SearchBox,
   Empty, PageHeader, CardGrid, itemRise, ViewToggle, Badge, InfoRow, BarcodeLabel,
@@ -70,6 +70,7 @@ export function ProductForm({ editing, onClose, onCreated }) {
   const labelOptions = {
     size: labelSize,
     rotation: labelRot,
+    dpi: lp.settings.dpi,
     store: db.settings.name || "",
     title: t("Étiquettes code-barres"),
     dir: lang === "ar" ? "rtl" : "ltr",
@@ -276,6 +277,7 @@ export function ProductForm({ editing, onClose, onCreated }) {
                   <Btn variant="soft" icon={Printer} onClick={printLabel}>{t("Imprimer l'étiquette")}</Btn>
                 </div>
               </div>
+              {!lp.direct && <p className="mt-2 text-xs text-slate-500">{t(CHROME_PRINT_HINT)}</p>}
               <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <LabelPrinterStatus lp={lp} />
                 {labelMsg && (

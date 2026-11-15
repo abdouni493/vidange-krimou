@@ -17,10 +17,10 @@
 // format de papier du pilote Windows n'interviennent plus.
 
 import {
-  ean13Bits, EAN13_GUARDS, LABEL_SIZES, DEFAULT_LABEL_SIZE, DEFAULT_LABEL_OPTS,
+  LABEL_SIZES, DEFAULT_LABEL_SIZE, DEFAULT_LABEL_OPTS,
   loadLabelSize, printLabels,
 } from "../barcode";
-import { fmtMoney } from "../store";
+import { renderLabelCanvas } from "./labelLayout";
 
 // ---------------------------------------------------------------- réglages
 
@@ -166,177 +166,8 @@ export function pickPrinter(printers = [], wanted = "") {
 
 // ---------------------------------------------------------------- dessin
 
-const FONT = `Arial, "Segoe UI", Tahoma, "Noto Sans Arabic", sans-serif`;
-const RTL = /[֐-ࣿיִ-﷿ﹰ-﻿]/;
-
-const resolveSize = (size) => {
-  const key = LABEL_SIZES[size] ? size : loadLabelSize();
-  return LABEL_SIZES[key] || LABEL_SIZES[DEFAULT_LABEL_SIZE];
-};
-
-/** Taille de l'étiquette en points d'impression (arrondie au point près). */
-export function labelDots(S, dpi) {
-  const dpm = dpi / 25.4;
-  return { dpm, W: Math.round(S.w * dpm), H: Math.round(S.h * dpm) };
-}
-
-function fitText(ctx, text, maxWidth) {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let lo = 0, hi = text.length;
-  while (lo < hi) {
-    const mid = Math.ceil((lo + hi) / 2);
-    if (ctx.measureText(`${text.slice(0, mid).trimEnd()}…`).width <= maxWidth) lo = mid;
-    else hi = mid - 1;
-  }
-  return `${text.slice(0, lo).trimEnd()}…`;
-}
-
-/** Coupe en `maxLines` lignes au plus, la dernière terminée par « … » si besoin. */
-function wrapText(ctx, text, maxWidth, maxLines) {
-  const words = String(text || "").replace(/\s+/g, " ").trim().split(" ");
-  const lines = [];
-  let cur = "";
-  for (let i = 0; i < words.length; i++) {
-    const tryLine = cur ? `${cur} ${words[i]}` : words[i];
-    if (ctx.measureText(tryLine).width <= maxWidth || !cur) {
-      cur = tryLine;
-    } else {
-      lines.push(cur);
-      cur = words[i];
-      if (lines.length === maxLines - 1) {
-        cur = words.slice(i).join(" ");
-        break;
-      }
-    }
-  }
-  if (cur) lines.push(cur);
-  return lines.slice(0, maxLines).map((l) => fitText(ctx, l, maxWidth));
-}
-
-function setFont(ctx, px, text = "") {
-  ctx.font = `bold ${px}px ${FONT}`;
-  ctx.direction = RTL.test(text) ? "rtl" : "ltr";
-}
-
-/**
- * Dessine le code EAN-13 (barres + chiffres) dans le rectangle donné, avec un
- * module (largeur de la barre la plus fine) d'un nombre ENTIER de points.
- */
-function drawEan13(ctx, value, { x, y, w, h, showText }) {
-  const { code, bits } = ean13Bits(value);
-  // 95 modules + 7 de marge blanche de chaque côté (le premier chiffre loge à gauche)
-  const m = Math.max(1, Math.min(4, Math.floor(w / 109)));
-  const blockW = 109 * m;
-  const x0 = Math.round(x + (w - blockW) / 2) + 7 * m;   // début de la garde gauche
-
-  const digitPx = showText ? Math.min(Math.round(10.5 * m), Math.max(10, Math.round(h * 0.2))) : 0;
-  const barH = Math.max(8, h - digitPx - (showText ? 1 : 0));
-  const guardH = showText ? Math.min(h, barH + Math.round(digitPx * 0.55)) : barH;
-
-  ctx.fillStyle = "#000";
-  for (let i = 0; i < bits.length; i++) {
-    if (bits[i] !== "1") continue;
-    ctx.fillRect(x0 + i * m, y, m, EAN13_GUARDS.has(i) ? guardH : barH);
-  }
-
-  if (!showText) return;
-  ctx.font = `bold ${digitPx}px ${FONT}`;
-  ctx.direction = "ltr";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  const ty = y + h;
-  ctx.fillText(code[0], x0 - 3.5 * m, ty);
-  for (let i = 0; i < 6; i++) {
-    ctx.fillText(code[i + 1], x0 + (3 + 7 * i + 3.5) * m, ty);
-    ctx.fillText(code[i + 7], x0 + (50 + 7 * i + 3.5) * m, ty);
-  }
-}
-
-/**
- * Dessine une étiquette sur un canvas de la taille exacte de l'étiquette, en
- * points d'impression. Le même dessin sert à l'aperçu et à l'impression.
- */
-export function renderLabelCanvas(entry, {
-  size, opts = DEFAULT_LABEL_OPTS, store = "", settings = loadPrinterSettings(), test = false,
-} = {}) {
-  const S = resolveSize(size);
-  const { dpm, W, H } = labelDots(S, settings.dpi);
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext("2d");
-  ctx.fillStyle = "#fff";
-  ctx.fillRect(0, 0, W, H);
-
-  ctx.save();
-  ctx.translate(Math.round(settings.offsetX * dpm), Math.round(settings.offsetY * dpm));
-  ctx.fillStyle = "#000";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "top";
-
-  const mx = Math.round(1 * dpm);                  // marges latérales 1 mm
-  const my = Math.round((S.h <= 25 ? 0.6 : 1) * dpm);
-  const gapY = Math.max(2, Math.round(0.3 * dpm));
-  const innerW = W - 2 * mx;
-  const pt = (p) => Math.round((p * settings.dpi) / 72);
-
-  let top = my;
-  let bottom = H - my;
-
-  if (test) {
-    // Cadre à 0,5 mm du bord : il doit apparaître entier et centré sur
-    // l'étiquette. Sinon, ajuster les décalages.
-    const inset = Math.round(0.5 * dpm);
-    const t = Math.max(2, Math.round(0.25 * dpm));
-    ctx.fillRect(inset, inset, W - 2 * inset, t);
-    ctx.fillRect(inset, H - inset - t, W - 2 * inset, t);
-    ctx.fillRect(inset, inset, t, H - 2 * inset);
-    ctx.fillRect(W - inset - t, inset, t, H - 2 * inset);
-    top = Math.max(top, inset + t + gapY);
-    bottom = Math.min(bottom, H - inset - t - gapY);
-  }
-
-  if (opts.showStore && store) {
-    const px = pt(S.store);
-    setFont(ctx, px, store);
-    ctx.fillText(fitText(ctx, store.toUpperCase(), innerW), W / 2, top);
-    top += px + gapY;
-  }
-
-  if (opts.showName) {
-    const px = pt(S.name);
-    const lines = S.h <= 25 ? 1 : 2;
-    setFont(ctx, px, entry.name);
-    const lh = Math.round(px * 1.1);
-    for (const line of wrapText(ctx, entry.name, innerW, lines)) {
-      ctx.fillText(line, W / 2, top);
-      top += lh;
-    }
-    top += gapY - (lh - px);
-  }
-
-  if (opts.showPrice && Number(entry.price) > 0) {
-    const px = pt(S.price);
-    const text = fmtMoney(entry.price);
-    setFont(ctx, px, "");
-    ctx.textBaseline = "bottom";
-    ctx.fillText(fitText(ctx, text, innerW), W / 2, bottom);
-    ctx.textBaseline = "top";
-    bottom -= px + gapY;
-  }
-
-  const showText = !!opts.showCode && bottom - top >= Math.round(6 * dpm);
-  drawEan13(ctx, entry.code, { x: mx, y: top, w: innerW, h: Math.max(8, bottom - top), showText });
-
-  if (opts.cutLines && !test) {
-    const d = Math.max(1, Math.round(0.15 * dpm));
-    for (let x = 0; x < W; x += 6) { ctx.fillRect(x, 0, 3, d); ctx.fillRect(x, H - d, 3, d); }
-    for (let y = 0; y < H; y += 6) { ctx.fillRect(0, y, d, 3); ctx.fillRect(W - d, y, d, 3); }
-  }
-
-  ctx.restore();
-  return canvas;
-}
+const resolveSize = (size) => LABEL_SIZES[size] || LABEL_SIZES[loadLabelSize()] || LABEL_SIZES[DEFAULT_LABEL_SIZE];
+export { renderLabelCanvas, labelDots } from "./labelLayout";
 
 /** Lit le canvas en noir et blanc pur : true = point imprimé. */
 export function canvasToDots(canvas, threshold = 150) {

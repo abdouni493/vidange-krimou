@@ -2,6 +2,7 @@
 // t() falls back to the French key when a translation is missing.
 
 export const AR = {
+  "Chrome : papier 40 × 20 mm (USER seulement si ses dimensions correspondent), échelle 100 %, marges Aucune, une page par feuille, en-têtes et pieds de page désactivés. Rotation 0° pour ce format.": "Chrome: ورق 40 × 20 مم (USER فقط إذا طابقت أبعاده)، مقياس 100٪، دون هوامش، صفحة واحدة لكل ورقة، مع تعطيل رؤوس الصفحات وتذييلاتها. دوران 0° لهذا المقاس.",
   // ===== Global / brand =====
   "AutoGarage Pro": "أوتو جراج برو",
   "Gestion de garage automobile": "إدارة ورشة تصليح السيارات",

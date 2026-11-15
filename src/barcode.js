@@ -2,7 +2,8 @@
 // Self-contained (no library) so the same renderer feeds both the on-screen
 // preview and the printed label sheet.
 
-import { esc, fmtMoney } from "./store";
+import { esc } from "./store";
+import { renderLabelCanvas } from "./lib/labelLayout";
 
 // Module patterns for the three EAN-13 alphabets
 const L = ["0001101","0011001","0010011","0111101","0100011","0110001","0101111","0111011","0110111","0001011"];
@@ -146,11 +147,10 @@ export const LABEL_SIZES = {
 const SIZE_ALIASES = { small: "s38x25", medium: "s50x30", large: "s70x40" };
 export const DEFAULT_LABEL_SIZE = "s40x20";
 
-// Chrome sends a page wider than tall as "landscape", and many thermal drivers
-// (XP-300B…) then rotate it 90° onto the label, printing it sideways. Rotating
-// the content ourselves on a portrait page cancels that out.
+// Unrotated stock is the default. Preserve explicit saved driver-specific rotations.
 export const LABEL_ROTATIONS = { r0: "0°", r90: "90°", r270: "270°" };
-export const DEFAULT_LABEL_ROTATION = "r90";
+export const DEFAULT_LABEL_ROTATION = "r0";
+export const CHROME_PRINT_HINT = "Chrome : papier 40 × 20 mm (USER seulement si ses dimensions correspondent), échelle 100 %, marges Aucune, une page par feuille, en-têtes et pieds de page désactivés. Rotation 0° pour ce format.";
 const ROT_KEY = "krimou.labelRotation";
 export function loadLabelRotation() {
   try { const v = localStorage.getItem(ROT_KEY); return LABEL_ROTATIONS[v] ? v : DEFAULT_LABEL_ROTATION; }
@@ -185,7 +185,7 @@ export const DEFAULT_LABEL_OPTS = {
  * @param entries  [{ name, code, price, copies }]
  * @param size     key of LABEL_SIZES
  */
-export function printLabels(entries, { size, rotation, opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr" } = {}) {
+export function printLabels(entries, { size, rotation, opts = DEFAULT_LABEL_OPTS, store = "", title = "Étiquettes code-barres", dir = "ltr", dpi = 203 } = {}) {
   const list = (entries || []).filter(Boolean);
   if (!list.length) return;
   const key = SIZE_ALIASES[size] || size || loadLabelSize();
@@ -195,20 +195,18 @@ export function printLabels(entries, { size, rotation, opts = DEFAULT_LABEL_OPTS
   const pageW = turned ? S.h : S.w, pageH = turned ? S.w : S.h;
   const transform = rot === "r90" ? `translateX(${S.h}mm) rotate(90deg)`
     : rot === "r270" ? `translateY(${S.w}mm) rotate(-90deg)` : "none";
-  const lines = S.h <= 25 ? 1 : 2;
-  // Vertical budget: the barcode gets whatever name/price leave over
-  const hasText = opts.showCode;
-
-  const label = (e) => `
-    <div class="pg"><div class="lbl">
-      ${opts.showStore && store ? `<div class="lbl-s">${esc(store)}</div>` : ""}
-      ${opts.showName ? `<div class="lbl-n">${esc(e.name)}</div>` : ""}
-      <div class="lbl-b">${ean13Svg(e.code, { height: hasText ? 50 : 56, showText: hasText, color: "#000" })}</div>
-      ${opts.showPrice && Number(e.price) > 0 ? `<div class="lbl-p">${esc(fmtMoney(e.price))}</div>` : ""}
-    </div></div>`;
+  // Chrome and previews use the exact TSPL dot layout, without direct offsets/flip.
+  const label = (e) => {
+    const canvas = renderLabelCanvas(e, { size: key, opts, store, settings: { dpi } });
+    return `<div class="pg"><div class="lbl"><img alt="${esc(e.name)} — ${ean13Bits(e.code).code}"
+      width="${canvas.width}" height="${canvas.height}" src="${canvas.toDataURL('image/png')}" /></div></div>`;
+  };
 
   const cells = list
-    .flatMap((e) => Array.from({ length: Math.max(1, Math.min(500, Number(e.copies) || 1)) }, () => label(e)))
+    .flatMap((e) => {
+      const image = label(e);
+      return Array(Math.max(1, Math.min(500, Math.round(Number(e.copies) || 1)))).fill(image);
+    })
     .join("");
 
   const w = window.open("", "_blank", "width=600,height=600");
@@ -224,23 +222,16 @@ export function printLabels(entries, { size, rotation, opts = DEFAULT_LABEL_OPTS
     body { font-family: Arial, 'Segoe UI', 'Tajawal', sans-serif; color: #000;
            -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .lbl {
-      width: ${S.w}mm; height: ${S.h}mm; padding: ${S.h <= 25 ? "0.8mm 1.5mm" : "1.2mm 1.8mm"}; overflow: hidden;
-      display: flex; flex-direction: column; align-items: center; justify-content: space-between;
-      gap: 0.3mm; position: absolute; top: 0; left: 0; transform-origin: top left; transform: ${transform};
-      ${opts.cutLines ? "outline: 0.2mm dashed #999; outline-offset: -0.6mm;" : ""}
+      width: ${S.w}mm; height: ${S.h}mm; overflow: hidden;
+      position: absolute; top: 0; left: 0; transform-origin: top left; transform: ${transform};
     }
-    .lbl-s { font-size: ${S.store}pt; text-transform: uppercase; letter-spacing: 0.3px; line-height: 1; }
-    .lbl-n { width: 100%; font-size: ${S.name}pt; font-weight: 700; text-align: center; line-height: 1.1;
-             display: -webkit-box; -webkit-line-clamp: ${lines}; -webkit-box-orient: vertical; overflow: hidden;
-             word-break: break-word; }
-    .lbl-b { width: 100%; flex: 1 1 auto; min-height: 0; display: flex; align-items: center; justify-content: center; }
-    .lbl-b svg { width: 100%; height: 100%; display: block; }
-    .lbl-p { font-size: ${S.price}pt; font-weight: 800; font-family: Arial, sans-serif; line-height: 1; white-space: nowrap; }
+    .lbl img { display: block; width: ${S.w}mm; height: ${S.h}mm; image-rendering: pixelated; }
     @media screen {
       html, body { width: auto; } body { background: #e5e7eb; padding: 10px; }
       .pg { background: #fff; margin: 0 auto 8px; box-shadow: 0 1px 3px rgba(0,0,0,.25); }
     }
   </style></head><body>${cells}
-  <script>window.onload = () => setTimeout(() => window.print(), 150);<\/script></body></html>`);
+  <script>window.onload = async () => { await document.fonts.ready; await Promise.all(Array.from(document.images, i => i.decode())); window.print(); };<\/script></body></html>`);
   w.document.close();
+  return w;
 }

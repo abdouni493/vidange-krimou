@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence, useReducedMotion, animate } from "framer-motion";
 import { X, Search, AlertTriangle, Inbox, LayoutGrid, Table2, ChevronDown } from "lucide-react";
 import { useApp } from "../context";
 import { fmtMoney } from "../store";
-import { ean13Svg, DEFAULT_LABEL_OPTS, LABEL_SIZES } from "../barcode";
+import { DEFAULT_LABEL_OPTS } from "../barcode";
+import PhysicalLabelPreview from "./PhysicalLabelPreview";
+import { loadPrinterSettings } from "../lib/labelPrinter";
 
 // ===== Animated number (count-up) =====
 export function CountUp({ value, format = (v) => Math.round(v).toLocaleString("fr-FR") }) {
@@ -330,37 +332,9 @@ export function InfoRow({ label, value }) {
 
 // ===== Barcode label — the on-screen twin of what `printLabels` puts on paper =====
 export function BarcodeLabel({ entry, opts = DEFAULT_LABEL_OPTS, size }) {
-  // Keep the on-screen preview at the printed label's aspect ratio
-  const S = LABEL_SIZES[size];
   const { db } = useApp();
-  const svg = useMemo(
-    () => ean13Svg(entry.code, { height: opts.showCode ? 46 : 40, showText: opts.showCode }),
-    [entry.code, opts.showCode]
-  );
-  return (
-    <div style={S ? { aspectRatio: `${S.w} / ${S.h}`, maxWidth: 260, margin: "0 auto" } : undefined}
-      className={`flex flex-col items-center justify-between gap-1 overflow-hidden rounded-lg bg-white px-3 py-2 ${
-      opts.cutLines ? "border border-dashed border-primary-200" : "border border-transparent"
-    }`}>
-      {opts.showStore && db.settings.name && (
-        <p className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{db.settings.name}</p>
-      )}
-      {opts.showName && (
-        <p className={`${S && S.h <= 25 ? "line-clamp-1" : "line-clamp-2"} text-center text-[11px] font-bold leading-tight text-primary-900`}>
-          {entry.name || "—"}
-        </p>
-      )}
-      {/* At a fixed label ratio the bars shrink to the height left over, so the
-          digits under them are never cut off. */}
-      <div className={S
-        ? "flex min-h-0 w-full flex-1 items-center justify-center [&>svg]:h-full [&>svg]:w-auto [&>svg]:max-w-full"
-        : "w-full max-w-[210px]"}
-        dangerouslySetInnerHTML={{ __html: svg }} />
-      {opts.showPrice && Number(entry.price) > 0 && (
-        <p className="font-mono text-xs font-extrabold text-primary-900">{fmtMoney(entry.price)}</p>
-      )}
-    </div>
-  );
+  const { dpi } = loadPrinterSettings();
+  return <PhysicalLabelPreview entry={entry} size={size} opts={opts} store={db.settings.name || ""} settings={{ dpi }} />;
 }
 
 // ===== Money summary line =====

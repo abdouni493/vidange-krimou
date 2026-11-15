@@ -177,6 +177,29 @@ export const DEFAULT_LABEL_OPTS = {
   showName: true, showPrice: true, showCode: true, showStore: false, cutLines: false,
 };
 
+// « Contenu de l'étiquette » survives a refresh: kept per device, like size/rotation.
+const OPTS_KEY = "label-opts";
+export function loadLabelOpts() {
+  try {
+    const v = JSON.parse(localStorage.getItem(OPTS_KEY) || "null");
+    if (v && typeof v === "object") {
+      const out = { ...DEFAULT_LABEL_OPTS };
+      for (const k of Object.keys(out)) if (typeof v[k] === "boolean") out[k] = v[k];
+      return out;
+    }
+  } catch { /* ignore */ }
+  return { ...DEFAULT_LABEL_OPTS };
+}
+export function saveLabelOpts(o) {
+  try { localStorage.setItem(OPTS_KEY, JSON.stringify(o)); } catch { /* ignore */ }
+}
+
+// Service labels live in the `barcodes` collection under a reserved id, so they are
+// saved in the database without any schema change.
+export const SERVICE_BARCODE_PREFIX = "svc-";
+export const serviceBarcodeId = (serviceId) => SERVICE_BARCODE_PREFIX + serviceId;
+export const isServiceBarcode = (b) => String(b?.id || "").startsWith(SERVICE_BARCODE_PREFIX);
+
 /**
  * Print labels sized for a thermal label printer: one label = one page whose
  * @page size equals the label, with zero margins. In the print dialog choose the

@@ -313,6 +313,18 @@ export const findProductByCode = (db, rawCode) => {
   return null;
 };
 
+/** Resolve a scanned code to a service (labels printed from the Services page). */
+export const findServiceByCode = (db, rawCode) => {
+  const code = digits(rawCode);
+  if (!code) return null;
+  const variants = new Set([code, code.replace(/^0+/, ""), `0${code}`]);
+  const label = (db.barcodes || []).find(
+    (b) => String(b.id || "").startsWith("svc-") && variants.has(digits(b.code))
+  );
+  if (!label) return null;
+  return (db.services || []).find((s) => `svc-${s.id}` === label.id) || null;
+};
+
 // ---- derived helpers ----
 export const repairTotalFromItems = (rep, db) => {
   const sTotal = (rep.services || []).reduce((s, it) => {

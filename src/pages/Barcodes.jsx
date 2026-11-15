@@ -5,11 +5,12 @@ import {
   Package, CheckCheck, Copy,
 } from "lucide-react";
 import { useApp } from "../context";
-import { uid, todayISO, fmtMoney, fmtDate } from "../store";
+import { uid, todayISO, fmtMoney, fmtDate, searchProducts } from "../store";
 import {
   randomEan13, normalizeEan13, isValidEan13, onlyDigits, DEFAULT_PREFIX,
   DEFAULT_LABEL_OPTS as DEFAULT_OPTS, printLabels,
   loadLabelSize, saveLabelSize, loadLabelRotation, saveLabelRotation,
+  loadLabelOpts, saveLabelOpts, isServiceBarcode,
 } from "../barcode";
 import { printLabelsAuto } from "../lib/labelPrinter";
 import { useLabelPrinter, LabelPrinterPanel, LabelBitmapPreview, PrintIssue } from "../components/LabelPrinter";
@@ -20,7 +21,8 @@ import {
 
 export default function Barcodes() {
   const { db, update, t, lang, can } = useApp();
-  const library = db.barcodes || [];
+  const library = useMemo(() => (db.barcodes || []).filter((b) => !isServiceBarcode(b)), [db.barcodes]);
+  const [pq, setPq] = useState("");
 
   const [form, setForm] = useState({ name: "", code: randomEan13(), price: "", productId: "" });
   const [syncProduct, setSyncProduct] = useState(true);
@@ -29,7 +31,7 @@ export default function Barcodes() {
   const setSize = (k) => { setSizeState(k); saveLabelSize(k); };
   const [rotation, setRotState] = useState(loadLabelRotation);
   const setRotation = (k) => { setRotState(k); saveLabelRotation(k); };
-  const [opts, setOpts] = useState(DEFAULT_OPTS);
+  const [opts, setOpts] = useState(loadLabelOpts);
   const [copies, setCopies] = useState({});   // entryId -> number of labels
   const [picked, setPicked] = useState([]);   // selected entry ids
   const [confirm, setConfirm] = useState(null);
@@ -38,7 +40,7 @@ export default function Barcodes() {
   const lp = useLabelPrinter();
 
   const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
-  const toggleOpt = (k) => setOpts((o) => ({ ...o, [k]: !o[k] }));
+  const toggleOpt = (k) => setOpts((o) => { const n = { ...o, [k]: !o[k] }; saveLabelOpts(n); return n; });
   const notify = (msg) => { setFlash(msg); setTimeout(() => setFlash(""), 2200); };
 
   const codeValid = isValidEan13(form.code);
@@ -47,7 +49,9 @@ export default function Barcodes() {
   // Picking a stock product pre-fills the label. A product whose stored barcode isn't a
   // valid EAN-13 (legacy short codes) keeps it as a prefix and gets the rest generated,
   // so the printed code stays recognisable instead of being zero-padded.
+  const productResults = useMemo(() => searchProducts(db.products, pq, 30), [db.products, pq]);
   const pickProduct = (e) => {
+    setPq("");
     const p = db.products.find((x) => x.id === e.target.value);
     if (!p) { setForm((f) => ({ ...f, productId: "" })); return; }
     setForm({
@@ -156,11 +160,11 @@ export default function Barcodes() {
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[380px_1fr]">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-[380px_1fr] xl:h-[calc(100vh-11rem)] xl:overflow-hidden">
         {/* ===== Generator ===== */}
         {canCreate && (
           <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-            className="card h-fit p-5 xl:sticky xl:top-24">
+            className="card h-fit p-5 xl:h-full xl:overflow-y-auto">
             <div className="mb-4 flex items-center gap-2.5">
               <div className="rounded-xl grad-primary p-2 text-white shadow-lift"><BarcodeIcon size={18} /></div>
               <h2 className="text-base font-bold text-primary-900">{t("Générer un code-barres")}</h2>
@@ -168,10 +172,34 @@ export default function Barcodes() {
 
             <div className="space-y-4">
               <Field label={t("Produit du stock")} hint={t("Optionnel — pré-remplit le nom et le prix")}>
-                <Select value={form.productId} onChange={pickProduct}>
-                  <option value="">{t("Produit libre (saisie manuelle)")}</option>
-                  {db.products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-                </Select>
+                {product ? (
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-primary-100 bg-primary-50/40 px-3 py-2">
+                    <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-primary-900">
+                      <Package size={14} className="shrink-0" /> <span className="truncate">{product.name}</span>
+                    </span>
+                    <button type="button" onClick={() => pickProduct({ target: { value: "" } })}
+                      className="shrink-0 text-xs font-semibold text-primary-600 hover:text-primary-800 cursor-pointer">
+                      {t("Produit libre (saisie manuelle)")}
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <SearchBox value={pq} onChange={setPq} placeholder={t("Rechercher un produit par nom...")} />
+                    {pq.trim() && (
+                      <div className="mt-1.5 max-h-56 overflow-y-auto rounded-xl border border-primary-100 bg-surface">
+                        {productResults.length === 0 ? (
+                          <p className="px-3 py-2 text-xs text-slate-400">{t("Aucun résultat")}</p>
+                        ) : productResults.map((p) => (
+                          <button key={p.id} type="button" onClick={() => pickProduct({ target: { value: p.id } })}
+                            className="flex w-full items-center justify-between gap-2 border-b border-primary-50 px-3 py-2 text-start text-sm last:border-0 hover:bg-primary-50 cursor-pointer">
+                            <span className="truncate font-medium text-primary-900">{p.name}</span>
+                            <span className="shrink-0 font-mono text-[11px] text-slate-400">{p.barcode || ""}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </Field>
 
               <Field label={t("Nom du produit")} required>
@@ -229,7 +257,7 @@ export default function Barcodes() {
         )}
 
         {/* ===== Library ===== */}
-        <div className={canCreate ? "" : "xl:col-span-2"}>
+        <div className={`xl:h-full xl:overflow-y-auto xl:pe-1 ${canCreate ? "" : "xl:col-span-2"}`}>
           <LabelPrinterPanel lp={lp} size={size} onSizeChange={setSize}
             rotation={rotation} onRotationChange={setRotation}
             previewEntry={selected[0] || (form.name ? previewEntry : library[0]) || previewEntry}

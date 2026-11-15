@@ -9,7 +9,7 @@ import { useApp } from "../context";
 import {
   uid, todayISO, fmtMoney, fmtDate, paidOf, presetRange, inRange,
   serviceNamesOf, restockRepair, consumeRepairStock, productPrice,
-  searchProducts, findProductByCode, norm,
+  searchProducts, findProductByCode, findServiceByCode, norm,
   printHTML, esc, docHead, docStamp, repairAmounts, DEFAULT_TVA_RATE,
 } from "../store";
 import {
@@ -210,7 +210,7 @@ export function ServicePicker({ selected, onChange }) {
  * marque, la description et le code-barres, et la caméra du téléphone remplace
  * la saisie quand la pièce porte une étiquette.
  */
-export function ProductPicker({ items, onChange }) {
+export function ProductPicker({ items, onChange, serviceIds, onServicesChange }) {
   const { db, t } = useApp();
   const [q, setQ] = useState("");
   const [scanning, setScanning] = useState(false);
@@ -249,6 +249,16 @@ export function ProductPicker({ items, onChange }) {
   // Retour affiché par le scanner après chaque lecture.
   const onScan = (code) => {
     const p = findProductByCode(db, code);
+    if (!p && onServicesChange) {
+      const sv = findServiceByCode(db, code);
+      if (sv) {
+        const ids = serviceIds || [];
+        if (!ids.includes(sv.id)) onServicesChange([...ids, sv.id]);
+        const msg = `${t("Service")} : ${sv.name}`;
+        setNotice({ ok: true, text: msg });
+        return { ok: true, message: msg };
+      }
+    }
     if (!p) {
       setNotice({ ok: false, text: `${code} — ${t("Aucun produit avec ce code-barres")}` });
       return { ok: false, message: t("Aucun produit avec ce code-barres") };
@@ -624,7 +634,7 @@ function RepairWizard({ mode, editing, onClose }) {
             <ServicePicker selected={serviceIds} onChange={setServiceIds} />
           </Field>
           <Field label={t("Produits du stock")}>
-            <ProductPicker items={products} onChange={setProducts} />
+            <ProductPicker items={products} onChange={setProducts} serviceIds={serviceIds} onServicesChange={setServiceIds} />
           </Field>
         </div>
       );
@@ -894,7 +904,7 @@ function FinalizeModal({ repair, onClose }) {
 
         <Field label={t("Produits du stock")}
           hint={t("Ajoutez, retirez ou corrigez les pièces réellement posées — le stock suit.")}>
-          <ProductPicker items={products} onChange={setProducts} />
+          <ProductPicker items={products} onChange={setProducts} serviceIds={serviceIds} onServicesChange={setServiceIds} />
         </Field>
 
         <Field label={t("Assigner des employés (optionnel)")}>

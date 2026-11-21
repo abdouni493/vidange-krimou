@@ -195,7 +195,7 @@ export const COLLECTIONS = [
       },
       {
         field: "products", table: "repair_products", parent: "repair_id",
-        cols: { productId: "product_id", qty: "qty" },
+        cols: { productId: "product_id", qty: "qty", price: "price" },
       },
       {
         field: "workers", table: "repair_workers", parent: "repair_id",

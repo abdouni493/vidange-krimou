@@ -336,7 +336,7 @@ export const repairTotalFromItems = (rep, db) => {
   }, 0);
   const pTotal = (rep.products || []).reduce((s, it) => {
     const p = db.products.find((x) => x.id === it.productId);
-    return s + (p ? Number(p.salePrice || p.purchasePrice) * (Number(it.qty) || 1) : 0);
+    return s + (p ? repairItemPrice(it, p) * (Number(it.qty) || 1) : 0);
   }, 0);
   return sTotal + pTotal;
 };
@@ -402,6 +402,13 @@ export const applyPurchaseToStock = (db, purchase, sign = 1) => {
 
 // Unit price actually charged: whatever the counter typed, else the catalogue price.
 export const productPrice = (p) => Number(p?.salePrice || p?.purchasePrice) || 0;
+
+/**
+ * Prix unitaire d'une pièce posée sur une réparation : le prix saisi par
+ * l'administrateur sur la fiche s'il y en a un, sinon le prix du catalogue.
+ */
+export const repairItemPrice = (it, p) =>
+  Number(it?.price) > 0 ? Number(it.price) : productPrice(p);
 
 /** Totals of a sale — tolerant of records written before a field existed. */
 export const saleAmounts = (sale) => {

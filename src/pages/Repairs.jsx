@@ -8,7 +8,7 @@ import {
 import { useApp } from "../context";
 import {
   uid, todayISO, fmtMoney, fmtDate, paidOf, presetRange, inRange,
-  serviceNamesOf, restockRepair, consumeRepairStock, productPrice,
+  serviceNamesOf, restockRepair, consumeRepairStock, productPrice, repairItemPrice,
   searchProducts, findProductByCode, findServiceByCode, norm,
   printHTML, esc, docHead, docStamp, repairAmounts, DEFAULT_TVA_RATE,
 } from "../store";
@@ -211,7 +211,10 @@ export function ServicePicker({ selected, onChange }) {
  * la saisie quand la pièce porte une étiquette.
  */
 export function ProductPicker({ items, onChange, serviceIds, onServicesChange }) {
-  const { db, t } = useApp();
+  const { db, t, currentUser } = useApp();
+  // Seul l'administrateur peut changer le prix d'une pièce sur la fiche ;
+  // les employés gardent le prix du catalogue.
+  const isAdmin = currentUser?.kind === "admin";
   const [q, setQ] = useState("");
   const [scanning, setScanning] = useState(false);
   const [notice, setNotice] = useState(null); // { ok, text }
@@ -246,6 +249,11 @@ export function ProductPicker({ items, onChange, serviceIds, onServicesChange })
 
   const remove = (id) => onChange(items.filter((i) => i.productId !== id));
 
+  const setPrice = (id, value) =>
+    onChange(items.map((i) => (i.productId === id
+      ? { ...i, price: value === "" ? "" : Math.max(0, Number(value) || 0) }
+      : i)));
+
   // Retour affiché par le scanner après chaque lecture.
   const onScan = (code) => {
     const p = findProductByCode(db, code);
@@ -270,7 +278,7 @@ export function ProductPicker({ items, onChange, serviceIds, onServicesChange })
 
   const subtotal = items.reduce((s, it) => {
     const p = db.products.find((x) => x.id === it.productId);
-    return s + productPrice(p) * (Number(it.qty) || 0);
+    return s + repairItemPrice(it, p) * (Number(it.qty) || 0);
   }, 0);
 
   return (
@@ -358,6 +366,7 @@ export function ProductPicker({ items, onChange, serviceIds, onServicesChange })
             const stock = Number(p.qtyCurrent) || 0;
             const qty = Number(it.qty) || 0;
             const short = qty > stock;
+            const unit = repairItemPrice(it, p);
             return (
               <motion.div key={it.productId} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
                 className={`rounded-xl border bg-white px-3.5 py-2.5 ${short ? "border-accent-300 bg-accent-50/40" : "border-primary-100"}`}>
@@ -367,7 +376,7 @@ export function ProductPicker({ items, onChange, serviceIds, onServicesChange })
                     <div className="min-w-0">
                       <p className="truncate text-[13px] font-semibold text-primary-900">{p.name}</p>
                       <p className="text-[11px] text-slate-400">
-                        {fmtMoney(productPrice(p))} · {stock} {t("en stock")}
+                        {fmtMoney(unit)} · {stock} {t("en stock")}
                       </p>
                     </div>
                   </div>
@@ -377,8 +386,14 @@ export function ProductPicker({ items, onChange, serviceIds, onServicesChange })
                       onChange={(e) => setQty(it.productId, Number(e.target.value))}
                       className="input h-9 w-14 px-1 py-1 text-center font-mono text-sm" />
                     <IconBtn icon={Plus} title="+" onClick={() => setQty(it.productId, qty + 1)} />
+                    {isAdmin && (
+                      <input type="number" min="0" step="any" value={it.price === "" ? "" : unit}
+                        title={t("Prix de vente")}
+                        onChange={(e) => setPrice(it.productId, e.target.value)}
+                        className="input h-9 w-24 px-1.5 py-1 text-end font-mono text-sm" />
+                    )}
                     <span className="w-24 text-end font-mono text-[13px] font-extrabold text-primary-900">
-                      {fmtMoney(productPrice(p) * qty)}
+                      {fmtMoney(unit * qty)}
                     </span>
                     <IconBtn icon={X} title={t("Supprimer")} variant="danger" onClick={() => remove(it.productId)} />
                   </div>
@@ -469,7 +484,7 @@ export const autoTotalOf = (db, serviceIds = [], products = []) => {
   );
   const p = products.reduce((sum, it) => {
     const pr = db.products.find((x) => x.id === it.productId);
-    return sum + productPrice(pr) * (Number(it.qty) || 0);
+    return sum + repairItemPrice(it, pr) * (Number(it.qty) || 0);
   }, 0);
   return s + p;
 };
@@ -668,7 +683,7 @@ function RepairWizard({ mode, editing, onClose }) {
             })}
             {products.map((it) => {
               const p = db.products.find((x) => x.id === it.productId);
-              return p && <MoneyLine key={it.productId} label={`${p.name} × ${it.qty}`} value={fmtMoney((p.salePrice || p.purchasePrice) * it.qty)} />;
+              return p && <MoneyLine key={it.productId} label={`${p.name} × ${it.qty}`} value={fmtMoney(repairItemPrice(it, p) * it.qty)} />;
             })}
           </div>
         </div>
@@ -979,7 +994,7 @@ function ViewModal({ repair, onClose }) {
         })}
         {repair.products.map((it, i) => {
           const p = db.products.find((x) => x.id === it.productId);
-          return p && <MoneyLine key={`p${i}`} label={`${p.name} × ${it.qty}`} value={fmtMoney((p.salePrice || p.purchasePrice) * it.qty)} />;
+          return p && <MoneyLine key={`p${i}`} label={`${p.name} × ${it.qty}`} value={fmtMoney(repairItemPrice(it, p) * it.qty)} />;
         })}
         {repair.services.length === 0 && repair.products.length === 0 && (
           <p className="text-xs text-slate-400">{t("Aucun service")}</p>
@@ -1037,7 +1052,7 @@ export function printRepairDoc(repair, db, t, lang, kind = "invoice") {
     ...(repair.products || []).map((it) => {
       const p = db.products.find((x) => x.id === it.productId);
       if (!p) return "";
-      return line(p.name, p.brand, t("Pièce"), Number(it.qty) || 1, Number(p.salePrice || p.purchasePrice) || 0);
+      return line(p.name, p.brand, t("Pièce"), Number(it.qty) || 1, repairItemPrice(it, p));
     }),
   ].filter(Boolean).join("");
 

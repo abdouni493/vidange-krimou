@@ -7,7 +7,7 @@ import {
 import { useApp } from "../context";
 import {
   fmtMoney, fmtDate, todayISO, toISODate, dayOffset, inRange, paidOf,
-  saleAmounts, repairAmounts, productPrice, clientNameOf,
+  saleAmounts, repairAmounts, productPrice, repairItemPrice, clientNameOf,
 } from "../store";
 import {
   PageHeader, Seg, Badge, MoneyLine, Input, Field, Empty,
@@ -123,7 +123,7 @@ export default function Analytics() {
       bump(it.productId, Number(it.qty) || 0, Number(it.price) || 0, "sales")));
     repairs.forEach((r) => (r.products || []).forEach((it) => {
       const p = db.products.find((x) => x.id === it.productId);
-      bump(it.productId, Number(it.qty) || 0, productPrice(p), "repairs");
+      bump(it.productId, Number(it.qty) || 0, repairItemPrice(it, p), "repairs");
     }));
 
     const productRows = [...moved.values()].map((r) => ({ ...r, margin: r.revenue - r.cost }));
